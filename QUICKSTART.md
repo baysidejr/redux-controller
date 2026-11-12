@@ -12,7 +12,7 @@
 
 Tick **Start with Windows** in the tray menu to start the receiver elevated at every sign-in without a UAC prompt. **Disconnect** on the phone pauses the automatic reconnection until you tap **Connect**; **Reset trust for this PC** forgets the PC entirely, and **Forget paired phones** in the tray menu does the same on the PC side.
 
-With the Redux front end: install the receiver into Redux's `tools/ReduxReceiver` folder (or point Redux at it under Settings → Controllers → Phone controller). Redux's menus then accept the controller, and launching a Jaguar game switches the phone to that game's overlay while **Follow the PC** is on in Game Profiles.
+With the Redux front end: the receiver ships inside Redux under `tools/ReduxReceiver`; choose **Set up the phone controller** under Settings → Controllers → Phone controller once, and it starts at sign-in from then on. Redux's menus then accept the controller, and launching a Jaguar game switches the phone to that game's overlay while **Follow the PC** is on in Game Profiles.
 
 Keep the app visible while playing. Leaving it or locking the phone releases controls. **Disconnect phone** in the tray menu releases every control immediately; **Exit and remove the controller** removes the virtual controller. Receiver messages go to the phone's status line and to `receiver.log` in `%LOCALAPPDATA%\ReduxController` (**Open log folder** in the menu); **connected** alone does not establish that driver output is available.
 

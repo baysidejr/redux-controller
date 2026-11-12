@@ -37,6 +37,8 @@ The tray menu shows the Windows controller state, the connected phone and its fr
 
 Receiver messages are queued and written by one background thread to `%LOCALAPPDATA%\ReduxController\receiver.log` and, when a console is attached (under the `dotnet` host), to that console; QuickEdit is disabled on an attached console. Nothing under the receiver lock may block on the console or the network: a paused console froze pairing and input in receiver 0.1. Keep every message on `ReceiverLog.WriteLine`.
 
+`ReduxReceiver.exe --start-with-windows` registers the logon task during that launch; the Redux front end uses it for its one-click **Set up the phone controller**, and the Redux release package ships the receiver under its `tools/ReduxReceiver` folder.
+
 The self-test runs without administrator privileges or a device. A development-only `--test-mode` option runs pairing and input capture without touching the virtual controller driver; status explicitly reports that no Windows output is present in this mode. Both are run through the `dotnet` host, which supplies the console the WinExe lacks.
 
 Code layout: `Receiver.cs` (pairing and reconnection API, UDP input, discovery, watchdog, HIDMaestro device, control port), `PairedPhones.cs` (reconnect-token store), `Firewall.cs`, `ReduxProtocol.cs` (HID profile, session decoding), `TrayApp.cs` (tray icon and menu), `StartupTask.cs` (logon task), `ReceiverLog.cs`, `SelfTest.cs`, `Program.cs`.

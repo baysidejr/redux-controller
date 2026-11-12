@@ -1,0 +1,12 @@
+.tools/
+dist/
+**/.gradle/
+**/build/
+**/bin/
+**/obj/
+**/local.properties
+**/*.user
+**/*.keystore
+**/*.jks
+/android/
+/receiver/

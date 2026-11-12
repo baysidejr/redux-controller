@@ -1,0 +1,126 @@
+{
+  "profiles": [
+    {
+      "id": "jaguar",
+      "name": "Atari Jaguar",
+      "subtitle": "Standard keypad · works with any game",
+      "plates": [
+        { "id": "keypad", "name": "Keypad", "template": "drawn", "labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-avp",
+      "name": "Alien vs. Predator",
+      "subtitle": "Three overlays · Marine, Predator, Alien",
+      "plates": [
+        { "id": "marine", "name": "Colonial Marine", "image": "overlays/avp_marine.webp", "template": "render", "labels": ["Weapon 1", "Weapon 2", "Weapon 3", "Weapon 4", "", "", "Previous", "Map", "Next", "*", "", "#"] },
+        { "id": "predator", "name": "Predator", "image": "overlays/avp_predator.webp", "template": "render", "labels": ["Weapon 1", "Weapon 2", "Weapon 3", "Weapon 4", "Medi-kit", "Vision", "Previous", "Map", "Next", "*", "", "#"] },
+        { "id": "alien", "name": "Alien", "image": "overlays/avp_alien.webp", "template": "render", "labels": ["", "", "", "", "", "", "Previous", "Map", "Next", "*", "", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-baldies",
+      "name": "Baldies",
+      "subtitle": "Workers, builders, soldiers and scientists",
+      "plates": [
+        { "id": "main", "name": "Baldies", "image": "overlays/baldies.webp", "template": "render", "labels": ["Worker", "Angel Wings", "Flag", "Builder", "Shovel", "Hand", "Soldier", "Zoom In/Out", "Mark / Go to location", "Scientist", "Music On/Off", "Frame"] }
+      ]
+    },
+    {
+      "id": "jaguar-battlemorph",
+      "name": "Battlemorph",
+      "subtitle": "Weapon bays and views",
+      "plates": [
+        { "id": "main", "name": "Battlemorph", "image": "overlays/battlemorph.webp", "template": "render", "labels": ["A Weapon Bay", "Twin Shot", "B Weapon Bay", "C Weapon Bay", "Top View (Close)", "D Weapon Bay", "Cross Hair", "Top View (Far)", "Toggle Views", "Reset", "Music", "Reset"] }
+      ]
+    },
+    {
+      "id": "jaguar-blue-lightning",
+      "name": "Blue Lightning",
+      "subtitle": "Afterburner, cruise and cockpit views",
+      "plates": [
+        { "id": "main", "name": "Blue Lightning", "image": "overlays/blue_lightning.webp", "template": "render", "labels": ["Afterburner", "Cruise", "Air Brake", "", "", "", "Cockpit View", "Cockpit View", "Cockpit View", "Reset", "Music On/Off", "Reset"] }
+      ]
+    },
+    {
+      "id": "jaguar-cannon-fodder",
+      "name": "Cannon Fodder",
+      "subtitle": "Group selection",
+      "plates": [
+        { "id": "main", "name": "Cannon Fodder", "image": "overlays/cannon_fodder.webp", "template": "render", "labels": ["Group 1", "Group 2", "Group 3", "", "", "", "", "", "", "*", "Music", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-cybermorph",
+      "name": "Cybermorph",
+      "subtitle": "Super weapon and views",
+      "plates": [
+        { "id": "main", "name": "Cybermorph", "image": "overlays/cybermorph.webp", "template": "render", "labels": ["Super Weapon", "Super Weapon", "Super Weapon", "Toggle", "Forward View", "Cockpit View", "Left View", "Rear View", "Right View", "*", "Music", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-doom",
+      "name": "DOOM",
+      "subtitle": "Weapons and map",
+      "plates": [
+        { "id": "main", "name": "DOOM", "image": "overlays/doom.webp", "template": "render", "labels": ["Fist", "Chainsaw", "Shotgun", "Chaingun", "Rocket Launcher", "Plasma Gun", "BFG 9000", "", "Map", "*", "", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-dragon",
+      "name": "Dragon: The Bruce Lee Story",
+      "subtitle": "Fighting styles",
+      "plates": [
+        { "id": "main", "name": "Dragon", "image": "overlays/dragon.webp", "template": "render", "labels": ["Mantis", "Fighter", "Nunchuku", "Mantis", "Fighter", "Nunchuku", "", "", "", "*", "Music", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-hover-strike",
+      "name": "Hover Strike",
+      "subtitle": "Launch, lock-on and cameras",
+      "plates": [
+        { "id": "main", "name": "Hover Strike", "image": "overlays/hover_strike.webp", "template": "render", "labels": ["Launch", "Lock-On", "Launch", "Radar/Compass", "Cycle Lock-On", "Radar/Compass", "External Camera", "Camera Adjust", "External Camera", "Reset", "Music", "Reset"] }
+      ]
+    },
+    {
+      "id": "jaguar-hover-strike-unconquered",
+      "name": "Hover Strike: Unconquered Lands",
+      "subtitle": "Same overlay as Hover Strike",
+      "plates": [
+        { "id": "main", "name": "Hover Strike CD", "image": "overlays/hover_strike.webp", "template": "render", "labels": ["Launch", "Lock-On", "Launch", "Radar/Compass", "Cycle Lock-On", "Radar/Compass", "External Camera", "Camera Adjust", "External Camera", "Reset", "Music", "Reset"] }
+      ]
+    },
+    {
+      "id": "jaguar-iron-soldier",
+      "name": "Iron Soldier",
+      "subtitle": "Mount selection",
+      "plates": [
+        { "id": "main", "name": "Iron Soldier", "image": "overlays/iron_soldier.webp", "template": "render", "labels": ["Right Shoulder", "", "Left Shoulder", "Right Hip", "", "Left Hip", "Right Hand", "", "Left Hand", "*", "Reset", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-jagmind",
+      "name": "JagMIND: Bomb Squad",
+      "subtitle": "Starcat Developments overlay",
+      "plates": [
+        { "id": "main", "name": "JagMIND", "image": "overlays/jagmind.webp", "template": "scan", "labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-trevor-mcfur",
+      "name": "Trevor McFur in the Crescent Galaxy",
+      "subtitle": "Weapons",
+      "plates": [
+        { "id": "main", "name": "Trevor McFur", "image": "overlays/trevor_mcfur.webp", "template": "scan", "labels": ["Magnet", "Tracer", "Beam", "Flash", "Missile", "Ring", "Bolt", "Shield", "Cutter", "*", "", "#"] }
+      ]
+    },
+    {
+      "id": "jaguar-wolfenstein",
+      "name": "Wolfenstein 3D",
+      "subtitle": "Game slots, save and map",
+      "plates": [
+        { "id": "main", "name": "Wolfenstein 3D", "image": "overlays/wolfenstein.webp", "template": "scan", "labels": ["Game 1", "Game 2", "Game 3", "Save Game", "Save Game", "Map", "", "", "", "*", "Music", "#"] }
+      ]
+    }
+  ]
+}

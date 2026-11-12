@@ -1,0 +1,19 @@
+# Try Redux Controller
+
+1. Extract the Windows receiver ZIP to a folder. Keep its files together. Close the old Dish session so its virtual controllers do not confuse this test.
+2. Open `ReduxReceiver.exe`. Windows requests administrator permission; the virtual-controller driver requires it. If HIDMaestro is missing, the receiver installs it. The receiver has no window: it lives in the task tray as an orange **R** icon and shows a notification with its six-digit PIN and the PC address. Right-click the icon for its menu, or double-click it to show the PIN again. The icon turns green once the phone is connected and grey if the Windows controller is unavailable; the menu's first line says why.
+3. The receiver registers its own Windows Firewall rules for your private network each time it starts, so no firewall prompt needs answering. If discovery or connection still fails, run the included `Allow-Private-Network.ps1` from an administrator PowerShell, then retry.
+4. Transfer `ReduxController-0.2-debug.apk` to the Pixel and open it to install. Android may ask you to allow app installation from the file manager/browser used to open it. The app installs alongside Dish.
+5. Plug the G8 into the Pixel. Use green Android mode with steady connection lights.
+6. In **Connections**, verify that the controller is detected. Tap **Find PCs on this network**, or type the IPv4 address shown in the tray menu. Enter the six-digit PIN and tap **Pair & connect**. This is needed once per PC: from then on the phone reconnects on its own whenever the receiver is running, including after the receiver or the phone restarts.
+7. On Windows, choose **Open joy.cpl** from the tray menu (or press **Win + R** and enter `joy.cpl`) and open **Redux Jaguar Controller → Properties → Test**.
+8. Open **Game Profiles** on the Pixel and pick an overlay: **Atari Jaguar** is the plain numeric keypad for any game; the others reproduce the original game overlays (Alien vs. Predator with its Marine, Predator and Alien plates, Doom, Cybermorph, Hover Strike, …). Every overlay sends the same Windows buttons 17–28, so one BigPEmu binding covers them all. Physical controls and all twelve phone keys should affect the same Windows controller.
+9. In BigPEmu's **Input Device 1** bindings, assign the physical controls and each of the twelve touch keys. Suggested physical mapping: A/B/X → Jaguar A/B/C; Menu/View → Pause/Option.
+
+Tick **Start with Windows** in the tray menu to start the receiver elevated at every sign-in without a UAC prompt. **Disconnect** on the phone pauses the automatic reconnection until you tap **Connect**; **Reset trust for this PC** forgets the PC entirely, and **Forget paired phones** in the tray menu does the same on the PC side.
+
+With the Redux front end: install the receiver into Redux's `tools/ReduxReceiver` folder (or point Redux at it under Settings → Controllers → Phone controller). Redux's menus then accept the controller, and launching a Jaguar game switches the phone to that game's overlay while **Follow the PC** is on in Game Profiles.
+
+Keep the app visible while playing. Leaving it or locking the phone releases controls. **Disconnect phone** in the tray menu releases every control immediately; **Exit and remove the controller** removes the virtual controller. Receiver messages go to the phone's status line and to `receiver.log` in `%LOCALAPPDATA%\ReduxController` (**Open log folder** in the menu); **connected** alone does not establish that driver output is available.
+
+This build has software tests; actual Pixel/G8 and BigPEmu compatibility still require the hardware test above. The X5 variant has not been confirmed or tested.

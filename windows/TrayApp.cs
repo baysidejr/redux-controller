@@ -69,7 +69,8 @@ public sealed partial class TrayApp : ApplicationContext
     private void Refresh()
     {
         var now = receiver.Snapshot();
-        controllerItem.Text = now.OutputReady ? "Windows controller: Redux Jaguar Controller ready (32 buttons)" : "Windows controller unavailable: " + (now.OutputError ?? "unknown error");
+        controllerItem.Text = (now.OutputReady ? "Windows controller: Redux Jaguar Controller ready (32 buttons)" : "Windows controller unavailable: " + (now.OutputError ?? "unknown error"))
+            + (now.MouseReady ? " · phone mouse ready" : receiver.TestMode ? "" : " · phone mouse unavailable: " + (now.MouseError ?? "unknown error"));
         var phone = now.PhoneName ?? "Phone";
         phoneItem.Text = now.PhonePaired ? (now.Released ? $"{phone}: connected, waiting for input" : $"{phone}: connected · {now.Packets} frames") : (now.PairedPhones > 0 ? $"Phone: not connected · {now.PairedPhones} paired phone(s) may reconnect" : "Phone: not paired");
         profileItem.Visible = now.Profile != null;

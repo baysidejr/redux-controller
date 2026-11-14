@@ -45,6 +45,10 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
     @Volatile var enabled = true
     @Volatile var visible = true
     @Volatile var outputReady = false; private set
+    /** The receiver accepts the packet with the mouse section (receiver 0.4 and later). */
+    @Volatile var mouseProtocol = false; private set
+    /** Windows has the Redux Phone Mouse device. */
+    @Volatile var mouseReady = false; private set
     @Volatile var pcName: String = prefs.getString("pc", "").orEmpty(); private set
     @Volatile var wantConnected = token != null; private set
     /** The profile the PC asked the phone to show (null when the PC has no opinion). */
@@ -139,14 +143,20 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
         socket = DatagramSocket()
         pcName = reply.optString("pc", pcName)
         prefs.edit().putString("pc", pcName).apply()
+        mouseProtocol = reply.optBoolean("mouseProtocol", false)
+        mouseReady = reply.optBoolean("mouseReady", false)
         connected = true
         checkStatus()
     }
 
     private fun send() {
         if (!connected) return
-        // Lost focus or a page transition sends neutral, never the last held state.
-        val report = synchronized(state) { if (enabled) state.report() else ControllerState().report() }
+        // Lost focus or a page transition sends neutral, never the last held state. An older
+        // receiver takes the 17-byte report only, so pending mouse motion is dropped for it.
+        val report = synchronized(state) {
+            if (!mouseProtocol || !enabled) state.clearMouseMotion()
+            if (enabled) state.report(mouseProtocol) else ControllerState().report(mouseProtocol)
+        }
         val seq = ++sequence
         val header = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN).put(session).putLong(seq).array()
         val nonce = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN).put(session, 0, 4).putLong(seq).array()
@@ -161,9 +171,10 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
         val status = request("/status", null, true)
         if (!connected || session !== expected) return
         outputReady = status.optBoolean("outputReady")
+        mouseReady = status.optBoolean("mouseReady")
         val profile = status.optString("profile").ifEmpty { null }
         if (profile != pcProfile) { pcProfile = profile; onProfile?.invoke(profile) }
-        changed(if (outputReady) "Connected to ${pcName.ifEmpty { host }} · one Redux gamepad · ${status.optLong("packets")} frames" else "Connected · ${status.optString("error", "controller output unavailable")}")
+        changed(if (outputReady) "Connected to ${pcName.ifEmpty { host }} · one Redux gamepad${if (mouseReady) " + mouse" else ""} · ${status.optLong("packets")} frames" else "Connected · ${status.optString("error", "controller output unavailable")}")
     }
 
     private class PairingRevoked(message: String) : Exception(message)
@@ -208,13 +219,13 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
         } finally { c.disconnect() }
     }
 
-    private fun fail(error: Throwable) { connected = false; outputReady = false; socket?.close(); socket = null; changed(error.message ?: "Connection failed") }
+    private fun fail(error: Throwable) { connected = false; outputReady = false; mouseReady = false; mouseProtocol = false; socket?.close(); socket = null; changed(error.message ?: "Connection failed") }
     /** Explicit disconnect: release everything and stop reconnecting until Connect or a new pairing. */
     fun disconnect() = worker.execute { wantConnected = false; closeSession(); changed(if (paired) "Disconnected · tap Connect to resume" else "Disconnected") }
     private fun closeSession() {
         synchronized(state) { state.release() }
         if (connected) runCatching { request("/disconnect", "{}", true) }
-        connected = false; outputReady = false; socket?.close(); socket = null; pcProfile = null
+        connected = false; outputReady = false; mouseReady = false; mouseProtocol = false; socket?.close(); socket = null; pcProfile = null
     }
     /** Forget the PC's certificate and the reconnect token; the next connection needs a PIN. */
     fun forgetTrust(address: String) {

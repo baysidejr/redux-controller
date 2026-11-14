@@ -17,6 +17,14 @@ Validated on November 11, 2026 (America/New_York).
 - On the user's Windows 11 PC, the elevated receiver installed HIDMaestro and created the **Redux Jaguar Controller** device (status OK in Device Manager, VID 1209 / PID 5244).
 - Nineteenth self-test assertion: receiver console messages return at once while the console host is paused.
 
+## Receiver 0.4 and app 0.3 (mouse mode), November 14, 2026
+
+- Receiver: a second HIDMaestro device (Redux Phone Mouse, three buttons and wheel), 57- or 63-byte packets, mouse readiness in `/status`, `/control/state` and the tray menu; eleven new self-test assertions (36 in total) cover the mouse profile, wire decoding, both packet lengths, undeclared button bits, odd lengths and button release on timeout. Release build and self-contained publish with zero warnings.
+- Android: `TrackpadView`, `HoldButton` and `MouseMotion`, the mouse page, LB/RB as left/right click, release on page change and focus loss; fourteen unit tests pass (mouse report layout and motion consumption, oversized motion split across packets, release semantics, speed clamping, rounding carry-over, scroll direction) and lint reports no errors.
+- Emulator with receiver 0.4 in test mode (`.tools/emulator-mouse.py`): paired with the PIN, every captured packet carried the mouse section, a trackpad drag arrived as positive relative dx/dy with no buttons, Left click and Right click were held while touched and released on lift, a trackpad tap produced a left click that released on its own, the scroll strip sent negative wheel detents, the gamepad report stayed neutral throughout, and Back to gamepad returned to the overlay with nothing held. Screenshot: `dist/screenshots/mouse.png`.
+- Deployed: receiver 0.4.0 replaced 0.3.1 under the installed Redux (`tools\ReduxReceiver`) and the Redux source tree; the logon task restarted it and the control port reported version 0.4.0 with the mouse device ready.
+- Still to validate on hardware: cursor movement, clicks, scrolling and drag in Windows from the Pixel 9 in the G8, LB/RB clicks, and that BigPEmu's bindings are unaffected by the second device.
+
 ## Receiver 0.3 and app 0.2 (reconnect, overlays, Redux front end)
 
 - Receiver: self-registering firewall rules, paired-phone token store (`/reconnect`), loopback control port 19444, profile hand-off; six new self-test assertions cover the token store (25 in total). Release build with zero warnings.

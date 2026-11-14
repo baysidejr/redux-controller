@@ -16,18 +16,18 @@ using Microsoft.Extensions.Logging;
 
 namespace Redux;
 
-public readonly record struct ReceiverSnapshot(bool OutputReady, string? OutputError, bool PhonePaired, string? PhoneName, long Packets, long InputAgeMs, bool Released, string? Profile, int PairedPhones);
+public readonly record struct ReceiverSnapshot(bool OutputReady, string? OutputError, bool PhonePaired, string? PhoneName, long Packets, long InputAgeMs, bool Released, string? Profile, int PairedPhones, bool MouseReady, string? MouseError);
 
 /// <summary>
 /// The receiver proper: PIN pairing and token reconnection over pinned HTTPS, the encrypted
 /// full-state UDP input listener, the discovery responder, the stale-input watchdog, the
-/// HIDMaestro device and a loopback control port for the Redux front end. Pairing, decoding
-/// and HID submits are serialized under one lock; nothing under that lock may block on the
-/// console or the network.
+/// HIDMaestro devices (the Jaguar controller and, since 0.4, the phone mouse) and a loopback
+/// control port for the Redux front end. Pairing, decoding and HID submits are serialized under
+/// one lock; nothing under that lock may block on the console or the network.
 /// </summary>
 public sealed class Receiver
 {
-    public const string Version = "0.3.1";
+    public const string Version = "0.4.0";
     public const int HttpsPort = 19443, ControlPort = 19444, InputPort = 19876, DiscoveryPort = 19879;
     public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReduxController");
 
@@ -45,7 +45,10 @@ public sealed class Receiver
     private string? profile;
     private HMContext? context;
     private HMController? controller;
+    private HMController? mouse;
     private string? outputError;
+    private string? mouseError;
+    private byte mouseButtons;
     private long lastPairAttempt;
     private WebApplication? app;
     private UdpClient? udp, discovery;
@@ -61,7 +64,7 @@ public sealed class Receiver
     public ReceiverSnapshot Snapshot()
     {
         lock (gate)
-            return new(controller != null, outputError, session != null, phoneName, session?.Packets ?? 0, session == null ? 0 : Environment.TickCount64 - session.LastFrame, session?.Released ?? true, profile, phones.Count);
+            return new(controller != null, outputError, session != null, phoneName, session?.Packets ?? 0, session == null ? 0 : Environment.TickCount64 - session.LastFrame, session?.Released ?? true, profile, phones.Count, mouse != null, mouseError);
     }
 
     public static IEnumerable<(string Address, string Interface)> LocalAddresses()
@@ -76,7 +79,7 @@ public sealed class Receiver
     {
         try
         {
-            if (TestMode) outputError = "Test mode: input capture only; no Windows controller.";
+            if (TestMode) outputError = mouseError = "Test mode: input capture only; no Windows controller.";
             else
             {
                 context = new HMContext();
@@ -86,6 +89,12 @@ public sealed class Receiver
             }
         }
         catch (Exception e) { outputError = e.Message; }
+        // The mouse is optional: a failure here leaves the gamepad working.
+        if (context != null)
+        {
+            try { mouse = context.CreateController(MouseProfile.Build(), "redux-mouse"); mouse.SubmitMouse(new HMMouseState()); }
+            catch (Exception e) { mouseError = e.Message; }
+        }
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory });
         builder.Logging.ClearProviders();
@@ -115,7 +124,7 @@ public sealed class Receiver
         // Local-only inspection for automated emulator tests, never present in normal operation.
         if (TestMode) app.MapGet("/control/test-capture", (HttpRequest request) =>
         {
-            lock (gate) return Results.Json(new { packets = session?.Packets ?? 0, released = session?.Released ?? true, report = session == null ? null : Convert.ToHexStringLower(session.Report) });
+            lock (gate) return Results.Json(new { packets = session?.Packets ?? 0, released = session?.Released ?? true, report = session == null ? null : Convert.ToHexStringLower(session.Report), mouse = session == null ? null : Convert.ToHexStringLower(session.Mouse) });
         });
 
         udp = new UdpClient(new IPEndPoint(IPAddress.Any, InputPort));
@@ -127,6 +136,7 @@ public sealed class Receiver
 
         ReceiverLog.WriteLine($"REDUX CONTROLLER · Windows receiver {Version}");
         ReceiverLog.WriteLine(controller != null ? "One Redux Jaguar Controller is ready (32 buttons)." : "Controller output unavailable: " + outputError);
+        ReceiverLog.WriteLine(mouse != null ? "The Redux Phone Mouse is ready (3 buttons, wheel)." : "Phone mouse unavailable: " + mouseError);
         ReceiverLog.WriteLine($"Pairing PIN: {Pin}");
         foreach (var (address, name) in LocalAddresses()) ReceiverLog.WriteLine($"PC address: {address} ({name})");
         ReceiverLog.WriteLine($"Certificate SHA256: {CertificateFingerprint}");
@@ -143,12 +153,14 @@ public sealed class Receiver
         lock (gate)
         {
             try { controller?.SubmitRawReport(ControllerProfile.Neutral); } catch (Exception) { }
+            try { mouse?.SubmitMouse(new HMMouseState()); } catch (Exception) { }
             session?.Release(); session = null;
             controller?.Dispose(); controller = null;
+            mouse?.Dispose(); mouse = null;
             context?.Dispose(); context = null;
         }
         cert.Dispose();
-        ReceiverLog.WriteLine("Receiver stopped. Virtual controller removed.");
+        ReceiverLog.WriteLine("Receiver stopped. Virtual controller and mouse removed.");
     }
 
     /// <summary>Release every control and forget the phone's session, from the tray or the control port.</summary>
@@ -157,7 +169,7 @@ public sealed class Receiver
         lock (gate)
         {
             if (session == null) return;
-            Submit(new byte[17]);
+            Submit(new byte[17]); ForwardMouse(new byte[MouseProfile.WireSize]);
             session.Release(); session = null;
         }
         ReceiverLog.WriteLine("Phone disconnected by the PC. All controls released.");
@@ -232,11 +244,12 @@ public sealed class Receiver
     // Caller holds the gate: start a fresh input session for this phone.
     private object Open(string name, string message, byte[]? token)
     {
-        Submit(new byte[17]);
+        Submit(new byte[17]); ForwardMouse(new byte[MouseProfile.WireSize]);
         session = new InputSession();
         phoneName = name;
         ReceiverLog.WriteLine(message);
-        return new { session = Convert.ToHexStringLower(session.Id), key = Convert.ToHexStringLower(session.Key), udpPort = InputPort, token = token == null ? null : Convert.ToHexStringLower(token), pc = Environment.MachineName };
+        // mouseProtocol: this receiver accepts the 63-byte packet with the mouse section; mouseReady: Windows has the mouse device.
+        return new { session = Convert.ToHexStringLower(session.Id), key = Convert.ToHexStringLower(session.Key), udpPort = InputPort, token = token == null ? null : Convert.ToHexStringLower(token), pc = Environment.MachineName, mouseProtocol = true, mouseReady = mouse != null };
     }
 
     private IResult Status(HttpRequest request)
@@ -244,7 +257,7 @@ public sealed class Receiver
         lock (gate)
         {
             if (!Authorized(request)) return Results.Json(new { error = "Session expired. Reconnecting…" }, statusCode: 401);
-            return Results.Json(new { outputReady = controller != null, error = outputError, packets = session!.Packets, released = session.Released, inputAgeMs = Environment.TickCount64 - session.LastFrame, profile, pc = Environment.MachineName, testReport = TestMode ? Convert.ToHexStringLower(session.Report) : null });
+            return Results.Json(new { outputReady = controller != null, error = outputError, mouseReady = mouse != null, mouseError, packets = session!.Packets, released = session.Released, inputAgeMs = Environment.TickCount64 - session.LastFrame, profile, pc = Environment.MachineName, testReport = TestMode ? Convert.ToHexStringLower(session.Report) : null });
         }
     }
 
@@ -253,7 +266,7 @@ public sealed class Receiver
         lock (gate)
         {
             if (!Authorized(request)) return Results.Unauthorized();
-            Submit(new byte[17]);
+            Submit(new byte[17]); ForwardMouse(new byte[MouseProfile.WireSize]);
             session?.Release(); session = null;
             ReceiverLog.WriteLine("Phone disconnected. All controls released.");
             return Results.Ok(new { ok = true });
@@ -268,6 +281,7 @@ public sealed class Receiver
         {
             version = Version, pin = Pin, testMode = TestMode,
             outputReady = now.OutputReady, error = now.OutputError,
+            mouseReady = now.MouseReady, mouseError = now.MouseError,
             phonePaired = now.PhonePaired, phoneName = now.PhoneName, packets = now.Packets, inputAgeMs = now.InputAgeMs, released = now.Released,
             profile = now.Profile, pairedPhones = now.PairedPhones,
             addresses = LocalAddresses().Select(a => a.Address).ToArray(), httpsPort = HttpsPort,
@@ -303,6 +317,24 @@ public sealed class Receiver
         }
     }
 
+    // Caller holds the gate. Relative motion and wheel detents are sent as they arrive; button
+    // state is sent on change only, so the 8 ms full-state stream does not flood the mouse.
+    private void ForwardMouse(byte[] wire)
+    {
+        bool buttonsChanged = wire[5] != mouseButtons;
+        if (!buttonsChanged && !MouseProfile.HasMotion(wire)) return;
+        mouseButtons = wire[5];
+        if (mouse == null) return;
+        try { mouse.SubmitMouse(MouseProfile.StateOf(wire)); }
+        catch (Exception e)
+        {
+            mouseError = e.Message;
+            try { mouse.Dispose(); } catch (Exception) { }
+            mouse = null;
+            ReceiverLog.WriteLine("Phone mouse output failed: " + e.Message);
+        }
+    }
+
     private async Task InputLoop()
     {
         while (!cancel.IsCancellationRequested)
@@ -310,7 +342,7 @@ public sealed class Receiver
             try
             {
                 var packet = await udp!.ReceiveAsync(cancel.Token);
-                lock (gate) if (session?.Accept(packet.Buffer) == true) Submit(session.Report);
+                lock (gate) if (session?.Accept(packet.Buffer) == true) { Submit(session.Report); ForwardMouse(session.Mouse); }
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
@@ -341,7 +373,7 @@ public sealed class Receiver
         {
             try { await Task.Delay(50, cancel.Token); }
             catch (OperationCanceledException) { break; }
-            lock (gate) if (session?.ReleaseIfStale(Environment.TickCount64) == true) Submit(session.Report);
+            lock (gate) if (session?.ReleaseIfStale(Environment.TickCount64) == true) { Submit(session.Report); ForwardMouse(session.Mouse); }
         }
     }
 

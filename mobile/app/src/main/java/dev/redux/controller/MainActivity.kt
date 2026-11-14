@@ -40,6 +40,11 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private var deviceText: TextView? = null
     private var inputText: TextView? = null
     private var keypad: OverlayKeypad? = null
+    private val mouseButtons = ArrayList<HoldButton>()
+    private val motion = MouseMotion()
+    private var heldMouse = 0
+    private var physicalMouse = 0
+    private var pulsedMouse = 0
     private var connectionText = "Not connected · open Redux Receiver on your PC"
     private var page = "connections"
     private var xusb = 0
@@ -67,6 +72,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         page = savedInstanceState?.getString("page") ?: "connections"
         profileId = savedInstanceState?.getString("profile") ?: prefs.getString("profile", Profiles.DEFAULT) ?: Profiles.DEFAULT
         plateIndex = savedInstanceState?.getInt("plate") ?: 0
+        motion.speed = prefs.getInt("mouseSpeed", MouseMotion.DEFAULT_SPEED)
         link = ReduxLink(this, state) { message -> main.post { connectionText = message; statusText?.text = message } }
         link.onProfile = { id -> main.post { if (id != null) followPcProfile(id) } }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -83,14 +89,26 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     override fun onPause() { releaseInputs(); link.enabled = false; link.visible = false; super.onPause() }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (::link.isInitialized) { link.enabled = hasFocus; if (!hasFocus) releaseInputs() } }
     override fun onDestroy() { inputs.unregisterInputDeviceListener(this); link.close(); super.onDestroy() }
-    private fun releaseInputs() { keypad?.releaseAll(); synchronized(state) { state.release() }; xusb = 0; hatX = 0; hatY = 0 }
+    private fun releaseInputs() { keypad?.releaseAll(); releaseMouse(); synchronized(state) { state.release() }; xusb = 0; hatX = 0; hatY = 0 }
+    private fun releaseMouse() {
+        for (button in mouseButtons) button.release()
+        heldMouse = 0; physicalMouse = 0; pulsedMouse = 0
+        synchronized(state) { state.releaseMouse() }
+    }
 
     private fun navigate(destination: String) {
-        keypad?.releaseAll()
+        keypad?.releaseAll(); releaseMouse()
         synchronized(state) { state.keypad = 0 }
         page = destination
-        requestedOrientation = if (page == "play") ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        requestedOrientation = if (page == "play" || page == "mouse") ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         render()
+    }
+
+    private fun updateMouseButtons() { synchronized(state) { state.mouseButtons = heldMouse or physicalMouse or pulsedMouse } }
+    /** A tap is a press that lasts a few packets, then releases unless the same button is still held. */
+    private fun clickMouse(bit: Int) {
+        pulsedMouse = pulsedMouse or bit; updateMouseButtons()
+        main.postDelayed({ pulsedMouse = pulsedMouse and bit.inv(); updateMouseButtons() }, 60)
     }
 
     private fun selectProfile(id: String, plate: Int = 0, remember: Boolean = true) {
@@ -108,7 +126,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     }
 
     private fun render() {
-        statusText = null; deviceText = null; inputText = null; keypad = null
+        statusText = null; deviceText = null; inputText = null; keypad = null; mouseButtons.clear()
         root = column().apply { setBackgroundColor(bg); setPadding(dp(20), dp(12), dp(20), dp(12)) }
         root.setOnApplyWindowInsetsListener { view, insets ->
             if (Build.VERSION.SDK_INT >= 30) {
@@ -125,22 +143,28 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         val header = row()
         header.addView(label("REDUX", 22, accent, true), LinearLayout.LayoutParams(0, dp(44), 1f))
         if (page == "play") {
+            header.addView(button("Mouse") { navigate("mouse") }, LinearLayout.LayoutParams(dp(100), -2))
             header.addView(button("Connections") { navigate("connections") }, LinearLayout.LayoutParams(dp(130), -2))
             header.addView(button("Game Profiles") { navigate("profiles") }, LinearLayout.LayoutParams(dp(130), -2))
+        } else if (page == "mouse") {
+            header.addView(button("Back to gamepad", true) { navigate("play") }, LinearLayout.LayoutParams(dp(160), -2))
+            header.addView(button("Connections") { navigate("connections") }, LinearLayout.LayoutParams(dp(130), -2))
         } else header.addView(label("CONTROLLER", 12, muted, true))
         root.addView(header)
-        if (page != "play") {
+        if (page != "play" && page != "mouse") {
             val nav = row()
             nav.addView(button("Connections", page == "connections") { navigate("connections") }, weighted())
             nav.addView(button("Game Profiles", page == "profiles") { navigate("profiles") }, weighted())
             root.addView(nav)
         }
         statusText = label(connectionText, 12, muted).also {
-            if (page == "play") { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
+            if (page == "play" || page == "mouse") { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
             root.addView(it)
         }
         if (page == "play") {
             renderPlay()
+        } else if (page == "mouse") {
+            renderMouse()
         } else {
             content = column()
             root.addView(ScrollView(this).apply { isFillViewport = true; addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -200,8 +224,9 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         val output = card()
         output.addView(label("03   WINDOWS CONTROLLER", 12, accent, true))
         output.addView(label("One controller. All your inputs.", 18, ink, true))
-        output.addView(label("Redux exposes 32 buttons, two sticks, two independent triggers and a D-pad. The Jaguar keypad uses buttons 17–28. Check it in Windows with the tray menu's Open joy.cpl.", 13, muted))
+        output.addView(label("Redux exposes 32 buttons, two sticks, two independent triggers and a D-pad. The Jaguar keypad uses buttons 17–28. Check it in Windows with the tray menu's Open joy.cpl. Mouse mode adds a second device, the Redux Phone Mouse, with receiver 0.4 or later.", 13, muted))
         output.addView(button("Open the ${profile.name} profile", true) { navigate("play") })
+        output.addView(button("Use the phone as a mouse") { navigate("mouse") })
         content.addView(label("Built with input-mapping and certificate-pinning code adapted from Dish by TinkerNorth (LGPL-3.0-or-later).", 11, muted))
     }
 
@@ -221,6 +246,11 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
             if (item.plates.size > 1) c.addView(label(item.plates.joinToString(" · ") { it.name }, 13, muted))
             c.addView(button(if (active) "Play" else "Play with ${item.name}", active) { selectProfile(item.id); navigate("play") })
         }
+        val mouse = card()
+        mouse.addView(label("PHONE MOUSE", 12, accent, true))
+        mouse.addView(label("Trackpad for the PC", 24, ink, true))
+        mouse.addView(label("Move the Windows cursor from the phone's screen with left, right and middle buttons and a scroll strip. The GameSir controls keep working; LB and RB double as left and right click while mouse mode is open.", 14, muted))
+        mouse.addView(button("Open mouse mode") { navigate("mouse") })
         val bindings = card()
         bindings.addView(label("BIGPEMU BINDING GUIDE", 12, accent, true))
         bindings.addView(label("Input Device 1 → bindings", 18, ink, true))
@@ -253,6 +283,55 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
 
     private fun keyName(key: Int) = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")[key]
 
+    /** Mouse mode: a trackpad, a scroll strip and held left/middle/right buttons, laid out for thumbs in the G8 grips. */
+    private fun renderMouse() {
+        val body = column()
+        root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
+        val top = row()
+        top.addView(label("MOUSE MODE", 12, accent, true), LinearLayout.LayoutParams(0, -2, 1f))
+        val readiness = label(mouseReadiness(), 12, muted).also { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
+        top.addView(readiness, LinearLayout.LayoutParams(0, -2, 2f))
+        val speed = button(MouseMotion.label(motion.speed)) { }
+        speed.setOnClickListener {
+            motion.speed = if (motion.speed >= MouseMotion.SPEEDS) 1 else motion.speed + 1
+            prefs.edit().putInt("mouseSpeed", motion.speed).apply()
+            speed.text = MouseMotion.label(motion.speed)
+        }
+        top.addView(speed, LinearLayout.LayoutParams(dp(110), -2))
+        body.addView(top)
+        val middle = row()
+        val pad = TrackpadView(this).apply {
+            onGestureStart = { motion.reset() }
+            onMove = { dx, dy -> val (x, y) = motion.counts(dx, dy); synchronized(state) { state.addMouseMotion(x, y) } }
+            onScroll = { dy -> val detents = motion.detents(dy); if (detents != 0) synchronized(state) { state.addMouseMotion(0, 0, detents) } }
+            onTap = { clickMouse(ControllerState.MOUSE_LEFT) }
+            onTwoFingerTap = { clickMouse(ControllerState.MOUSE_RIGHT) }
+        }
+        middle.addView(pad, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(0, dp(6), dp(8), dp(8)) })
+        val strip = TrackpadView(this, scrollOnly = true).apply {
+            onGestureStart = { motion.reset() }
+            onScroll = { dy -> val detents = motion.detents(dy); if (detents != 0) synchronized(state) { state.addMouseMotion(0, 0, detents) } }
+        }
+        middle.addView(strip, LinearLayout.LayoutParams(dp(48), -1).apply { setMargins(0, dp(6), 0, dp(8)) })
+        body.addView(middle, LinearLayout.LayoutParams(-1, 0, 1f))
+        val bottom = row()
+        for ((label, bit, weight, prominent) in listOf(Triple("Left click", ControllerState.MOUSE_LEFT, 3f) to true, Triple("Middle", ControllerState.MOUSE_MIDDLE, 1f) to false, Triple("Right click", ControllerState.MOUSE_RIGHT, 3f) to true).map { (t, p) -> listOf(t.first, t.second, t.third, p) }) {
+            val view = HoldButton(this, label as String, prominent as Boolean).apply {
+                onHeld = { held -> heldMouse = if (held) heldMouse or (bit as Int) else heldMouse and (bit as Int).inv(); updateMouseButtons() }
+            }
+            mouseButtons.add(view)
+            bottom.addView(view, LinearLayout.LayoutParams(0, dp(58), weight as Float).apply { setMargins(0, 0, if (label == "Right click") 0 else dp(8), 0) })
+        }
+        body.addView(bottom)
+    }
+
+    private fun mouseReadiness() = when {
+        !link.connected -> "Not connected to the PC"
+        !link.mouseProtocol -> "Update Redux Receiver to 0.4 for mouse mode"
+        link.mouseReady -> "Mouse ready on ${link.pcName.ifEmpty { "the PC" }} · LB / RB click"
+        else -> "Connected · the PC has no mouse device yet"
+    }
+
     private fun devices() = InputDevice.getDeviceIds().map { InputDevice.getDevice(it) }.filterNotNull().filter { !it.isVirtual && (it.supportsSource(InputDevice.SOURCE_GAMEPAD) || it.supportsSource(InputDevice.SOURCE_JOYSTICK)) }
     private fun refreshDevice() {
         val available = devices()
@@ -277,6 +356,13 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.deviceId != selectedDeviceId || event.device?.let { it.supportsSource(InputDevice.SOURCE_GAMEPAD) || it.supportsSource(InputDevice.SOURCE_JOYSTICK) } != true) return super.dispatchKeyEvent(event)
         val down = event.action == KeyEvent.ACTION_DOWN
+        // In mouse mode the shoulder buttons click instead of reaching the gamepad.
+        if (page == "mouse" && (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1 || event.keyCode == KeyEvent.KEYCODE_BUTTON_R1)) {
+            val mouseBit = if (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1) ControllerState.MOUSE_LEFT else ControllerState.MOUSE_RIGHT
+            physicalMouse = if (down) physicalMouse or mouseBit else physicalMouse and mouseBit.inv()
+            updateMouseButtons()
+            return true
+        }
         val bit = when (event.keyCode) {
             KeyEvent.KEYCODE_BUTTON_A -> 0x1000; KeyEvent.KEYCODE_BUTTON_B -> 0x2000
             KeyEvent.KEYCODE_BUTTON_X -> 0x4000; KeyEvent.KEYCODE_BUTTON_Y -> 0x8000

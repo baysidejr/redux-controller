@@ -36,6 +36,24 @@ static class SelfTest
         Check(!session.Accept(Encrypt(session, 2, report)), "out-of-order packet rejected");
         report[16] = 9;
         Check(!session.Accept(Encrypt(session, 4, report)), "invalid hat rejected");
+        report[16] = 3;
+        // Phone mouse (receiver 0.4): a second plain HID device, fed from six bytes appended to the controller report.
+        var mouseProfile = MouseProfile.Build();
+        Check(mouseProfile.InputReportSize == 6, "6-byte relative mouse report: three buttons, X, Y and wheel");
+        Check(mouseProfile.DeviceModelProblem == null, "mouse profile has no device-model validation error");
+        var decoded = MouseProfile.StateOf(new byte[] { 0x0A, 0x00, 0xF6, 0xFF, 0xFF, 0x03 });
+        Check(decoded.X == 10 && decoded.Y == -10 && decoded.Wheel == -1 && decoded.Buttons == (HIDMaestro.HMMouseButtons.Left | HIDMaestro.HMMouseButtons.Right), "wire mouse fields decode as signed counts, detents and buttons");
+        var extended = new byte[23]; report.CopyTo(extended, 0);
+        BinaryPrimitives.WriteInt16LittleEndian(extended.AsSpan(17), 5); BinaryPrimitives.WriteInt16LittleEndian(extended.AsSpan(19), -3); extended[21] = 1; extended[22] = 0x01;
+        Check(session.Accept(Encrypt(session, 5, extended)), "controller + mouse packet (63 bytes) accepted");
+        Check(session.Report.SequenceEqual(report) && session.Mouse.SequenceEqual(extended[17..]), "controller and mouse sections preserved together");
+        Check(MouseProfile.HasMotion(session.Mouse), "motion is detected in the mouse section");
+        Check(session.Accept(Encrypt(session, 6, report)) && session.Mouse.All(b => b == 0), "controller-only packet from an older app still accepted and leaves the mouse neutral");
+        extended[22] = 0x08;
+        Check(!session.Accept(Encrypt(session, 7, extended)), "undeclared mouse button bits rejected");
+        Check(!session.Accept(new byte[60]), "packet of neither length rejected");
+        extended[22] = 0x01;
+        Check(session.Accept(Encrypt(session, 8, extended)) && session.ReleaseIfStale(session.LastFrame + 251) && session.Mouse.All(b => b == 0), "disconnect timeout releases held mouse buttons");
         // The console host pauses every write while text is selected; receiver messages must still return at once.
         var originalOut = Console.Out;
         using var consolePaused = new ManualResetEventSlim(false);
@@ -71,14 +89,14 @@ static class SelfTest
         public override void Write(string? value) => resume.Wait();
         public override void WriteLine(string? value) => resume.Wait();
     }
-    static byte[] Encrypt(InputSession s, long seq, byte[] report)
+    static byte[] Encrypt(InputSession s, long seq, byte[] plaintext)
     {
-        var packet = new byte[57]; s.Id.CopyTo(packet, 0);
+        var packet = new byte[24 + plaintext.Length + 16]; s.Id.CopyTo(packet, 0);
         BinaryPrimitives.WriteInt64LittleEndian(packet.AsSpan(16), seq);
         Span<byte> nonce = stackalloc byte[12]; s.Id.AsSpan(0, 4).CopyTo(nonce);
         packet.AsSpan(16, 8).CopyTo(nonce[4..]);
         using var aes = new AesGcm(s.Key, 16);
-        aes.Encrypt(nonce, report, packet.AsSpan(24, 17), packet.AsSpan(41, 16), packet.AsSpan(0, 24));
+        aes.Encrypt(nonce, plaintext, packet.AsSpan(24, plaintext.Length), packet.AsSpan(24 + plaintext.Length, 16), packet.AsSpan(0, 24));
         return packet;
     }
     static void Check(bool condition, string name)

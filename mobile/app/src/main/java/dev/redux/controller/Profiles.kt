@@ -4,11 +4,20 @@ package dev.redux.controller
 import android.content.Context
 import org.json.JSONObject
 
-/** One overlay plate: the artwork (or a drawn keypad) and twelve key labels, keys 1-9, *, 0, #. */
-data class Plate(val id: String, val name: String, val image: String?, val template: String, val labels: List<String>)
+/**
+ * One overlay plate: twelve key labels and optional pictograms for keys 1-9, *, 0, #, the key colour
+ * of the big-key surface, plus the original artwork (or a drawn keypad) for the classic view.
+ */
+data class Plate(val id: String, val name: String, val image: String?, val template: String, val labels: List<String>,
+                 val icons: List<String> = List(12) { "" }, val color: Int? = null)
 
-/** A game profile: one or more plates sharing the same Windows buttons 17–28. */
-data class Profile(val id: String, val name: String, val subtitle: String, val plates: List<Plate>)
+/** A game profile: one or more plates sharing the same Windows buttons 17–28, tinted with one colour. */
+data class Profile(val id: String, val name: String, val subtitle: String, val plates: List<Plate>, val color: Int? = null) {
+    /** The key colour of a plate: its own, else the profile's, else the Jaguar default. */
+    fun colorOf(plate: Plate): Int = plate.color ?: color ?: DEFAULT_COLOR
+
+    companion object { val DEFAULT_COLOR = 0xFFC8102E.toInt() }
+}
 
 object Profiles {
     const val DEFAULT = "jaguar"
@@ -26,14 +35,23 @@ object Profiles {
                 val plate = array.getJSONObject(j)
                 val labels = plate.getJSONArray("labels")
                 require(labels.length() == 12) { "Plate ${plate.getString("id")} needs 12 labels" }
+                val icons = plate.optJSONArray("icons")
+                require(icons == null || icons.length() == 12) { "Plate ${plate.getString("id")} needs 12 icons" }
                 plates.add(Plate(plate.getString("id"), plate.getString("name"), plate.optString("image").ifEmpty { null },
-                    plate.optString("template", "drawn"), List(12) { labels.getString(it) }))
+                    plate.optString("template", "drawn"), List(12) { labels.getString(it) },
+                    List(12) { icons?.getString(it) ?: "" }, colorOf(plate.optString("color"))))
             }
             require(plates.isNotEmpty()) { "Profile ${p.getString("id")} has no plates" }
-            profiles.add(Profile(p.getString("id"), p.getString("name"), p.optString("subtitle"), plates))
+            profiles.add(Profile(p.getString("id"), p.getString("name"), p.optString("subtitle"), plates, colorOf(p.optString("color"))))
         }
         require(profiles.any { it.id == DEFAULT }) { "The default profile is missing" }
         return profiles
+    }
+
+    /** "#RRGGBB" to an opaque ARGB int, or null when absent. Parsed by hand so unit tests need no android.graphics. */
+    fun colorOf(hex: String): Int? {
+        if (!Regex("#[0-9a-fA-F]{6}").matches(hex)) return null
+        return (0xFF shl 24) or hex.substring(1).toInt(16)
     }
 }
 

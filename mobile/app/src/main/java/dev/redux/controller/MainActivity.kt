@@ -37,6 +37,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private var statusText: TextView? = null
+    private var statusDot: TextView? = null
     private var deviceText: TextView? = null
     private var inputText: TextView? = null
     private var keypad: OverlayKeypad? = null
@@ -61,10 +62,13 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private val ink = Color.rgb(239, 243, 247)
     private val muted = Color.rgb(153, 170, 188)
     private val accent = Color.rgb(255, 106, 80)
+    private val online = Color.rgb(96, 214, 128)
+    private val offline = Color.rgb(255, 184, 64)
 
     private val profile: Profile get() = profiles.firstOrNull { it.id == profileId } ?: profiles.first { it.id == Profiles.DEFAULT }
     private val plate: Plate get() = profile.plates[plateIndex.coerceIn(0, profile.plates.size - 1)]
     private val followPc: Boolean get() = prefs.getBoolean("followPc", true)
+    private val bigKeys: Boolean get() = prefs.getBoolean("bigKeys", true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,7 +77,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         profileId = savedInstanceState?.getString("profile") ?: prefs.getString("profile", Profiles.DEFAULT) ?: Profiles.DEFAULT
         plateIndex = savedInstanceState?.getInt("plate") ?: 0
         motion.speed = prefs.getInt("mouseSpeed", MouseMotion.DEFAULT_SPEED)
-        link = ReduxLink(this, state) { message -> main.post { connectionText = message; statusText?.text = message } }
+        link = ReduxLink(this, state) { message -> main.post { connectionText = message; refreshStatus() } }
         link.onProfile = { id -> main.post { if (id != null) followPcProfile(id) } }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         inputs.registerInputDeviceListener(this, main)
@@ -87,7 +91,11 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); render() }
     override fun onResume() { super.onResume(); link.enabled = true; link.visible = true; refreshDevice() }
     override fun onPause() { releaseInputs(); link.enabled = false; link.visible = false; super.onPause() }
-    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (::link.isInitialized) { link.enabled = hasFocus; if (!hasFocus) releaseInputs() } }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && page == "play") applyImmersion()
+        if (::link.isInitialized) { link.enabled = hasFocus; if (!hasFocus) releaseInputs() }
+    }
     override fun onDestroy() { inputs.unregisterInputDeviceListener(this); link.close(); super.onDestroy() }
     private fun releaseInputs() { keypad?.releaseAll(); releaseMouse(); synchronized(state) { state.release() }; xusb = 0; hatX = 0; hatY = 0 }
     private fun releaseMouse() {
@@ -102,6 +110,23 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         page = destination
         requestedOrientation = if (page == "play" || page == "mouse") ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         render()
+    }
+
+    /** The play surface owns the whole screen: system bars hide and return with a swipe from the edge. */
+    private fun applyImmersion() {
+        val immersive = page == "play"
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(!immersive)
+            window.insetsController?.let {
+                it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (immersive) it.hide(WindowInsets.Type.systemBars()) else it.show(WindowInsets.Type.systemBars())
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (immersive) android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+                android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE else 0
+        }
+        window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
     }
 
     private fun updateMouseButtons() { synchronized(state) { state.mouseButtons = heldMouse or physicalMouse or pulsedMouse } }
@@ -119,6 +144,14 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     }
 
     /** The PC (Redux front end) launched a game: show its overlay while the user has Follow the PC on. */
+    /** The status line: the full message on the set-up pages, a dot and one word on the play surface. */
+    private fun refreshStatus() {
+        if (page == "play") {
+            statusText?.text = if (link.connected) "Connected" else "Offline"
+            statusDot?.setTextColor(if (link.connected) online else offline)
+        } else statusText?.text = connectionText
+    }
+
     private fun followPcProfile(id: String) {
         if (!followPc || id == profileId || profiles.none { it.id == id }) return
         selectProfile(id, remember = false)
@@ -126,44 +159,41 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     }
 
     private fun render() {
-        statusText = null; deviceText = null; inputText = null; keypad = null; mouseButtons.clear()
-        root = column().apply { setBackgroundColor(bg); setPadding(dp(20), dp(12), dp(20), dp(12)) }
+        statusText = null; statusDot = null; deviceText = null; inputText = null; keypad = null; mouseButtons.clear()
+        val padX = if (page == "play") dp(8) else dp(20); val padY = if (page == "play") dp(4) else dp(12)
+        root = column().apply { setBackgroundColor(bg); setPadding(padX, padY, padX, padY) }
         root.setOnApplyWindowInsetsListener { view, insets ->
             if (Build.VERSION.SDK_INT >= 30) {
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                view.setPadding(dp(20) + bars.left, dp(12) + bars.top, dp(20) + bars.right, dp(12) + bars.bottom)
+                view.setPadding(padX + bars.left, padY + bars.top, padX + bars.right, padY + bars.bottom)
             } else {
                 @Suppress("DEPRECATION")
-                view.setPadding(dp(20) + insets.systemWindowInsetLeft, dp(12) + insets.systemWindowInsetTop, dp(20) + insets.systemWindowInsetRight, dp(12) + insets.systemWindowInsetBottom)
+                view.setPadding(padX + insets.systemWindowInsetLeft, padY + insets.systemWindowInsetTop, padX + insets.systemWindowInsetRight, padY + insets.systemWindowInsetBottom)
             }
             insets
         }
         setContentView(root)
+        applyImmersion()
         root.requestApplyInsets()
+        if (page == "play") { renderPlay(); refreshDevice(); return }
         val header = row()
         header.addView(label("REDUX", 22, accent, true), LinearLayout.LayoutParams(0, dp(44), 1f))
-        if (page == "play") {
-            header.addView(button("Mouse") { navigate("mouse") }, LinearLayout.LayoutParams(dp(100), -2))
-            header.addView(button("Connections") { navigate("connections") }, LinearLayout.LayoutParams(dp(130), -2))
-            header.addView(button("Game Profiles") { navigate("profiles") }, LinearLayout.LayoutParams(dp(130), -2))
-        } else if (page == "mouse") {
+        if (page == "mouse") {
             header.addView(button("Back to gamepad", true) { navigate("play") }, LinearLayout.LayoutParams(dp(160), -2))
             header.addView(button("Connections") { navigate("connections") }, LinearLayout.LayoutParams(dp(130), -2))
         } else header.addView(label("CONTROLLER", 12, muted, true))
         root.addView(header)
-        if (page != "play" && page != "mouse") {
+        if (page != "mouse") {
             val nav = row()
             nav.addView(button("Connections", page == "connections") { navigate("connections") }, weighted())
             nav.addView(button("Game Profiles", page == "profiles") { navigate("profiles") }, weighted())
             root.addView(nav)
         }
         statusText = label(connectionText, 12, muted).also {
-            if (page == "play" || page == "mouse") { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
+            if (page == "mouse") { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
             root.addView(it)
         }
-        if (page == "play") {
-            renderPlay()
-        } else if (page == "mouse") {
+        if (page == "mouse") {
             renderMouse()
         } else {
             content = column()
@@ -237,6 +267,10 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         follow.addView(label("FOLLOW THE PC", 12, accent, true))
         follow.addView(label(if (followPc) "On · the Redux front end switches this phone to the game it launches" else "Off · profiles change only from this phone", 14, ink))
         follow.addView(button(if (followPc) "Turn off" else "Turn on") { prefs.edit().putBoolean("followPc", !followPc).apply(); render() })
+        val surface = card()
+        surface.addView(label("PLAY SURFACE", 12, accent, true))
+        surface.addView(label(if (bigKeys) "Big keys · twelve large keys in the game's colours fill the screen" else "Original art · the scanned overlay plate, fitted to the screen", 14, ink))
+        surface.addView(button(if (bigKeys) "Show the original overlay art" else "Show big keys") { prefs.edit().putBoolean("bigKeys", !bigKeys).apply(); render() })
         for (item in profiles) {
             val active = item.id == profileId
             val c = card()
@@ -259,26 +293,83 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         content.addView(label("Overlay artwork: AtariAge scans and community renders of the original Atari overlays, trademarks of their owners, included for personal use.", 11, muted))
     }
 
+    /**
+     * The play surface: a slim title bar (game, connection, settings), then the keypad across the
+     * whole remaining screen with Release and Mouse at the right thumb and, for games with several
+     * plates, previous/next at the left thumb.
+     */
     private fun renderPlay() {
-        val play = row()
+        val color = profile.colorOf(plate)
+        val bar = row().apply { setPadding(dp(4), 0, 0, 0) }
+        val title = TextView(this).apply {
+            text = if (profile.plates.size > 1) "${shortName(profile)} · ${plate.name}  ▾" else "${profile.name}  ▾"
+            textSize = 19f; setTextColor(ink); typeface = Typeface.DEFAULT_BOLD; maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(4), dp(6), dp(8), dp(6))
+            contentDescription = "Choose game profile"; isClickable = true; isFocusable = true
+            setOnClickListener { chooseProfile() }
+        }
+        bar.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+        statusDot = TextView(this).apply { text = "●"; textSize = 11f; setPadding(0, 0, dp(6), 0) }.also { bar.addView(it) }
+        statusText = TextView(this).apply { textSize = 14f; setTextColor(ink); setPadding(0, 0, dp(12), 0) }.also { bar.addView(it) }
+        bar.addView(TextView(this).apply { setBackgroundColor(Color.rgb(60, 68, 80)) }, LinearLayout.LayoutParams(dp(1), dp(22)))
+        bar.addView(tile("⚙", "", "Connections and settings") { navigate("connections") }, LinearLayout.LayoutParams(dp(48), dp(40)).apply { setMargins(dp(8), 0, 0, 0) })
+        root.addView(bar, LinearLayout.LayoutParams(-1, dp(44)))
+        root.addView(TextView(this).apply { background = shape(color, 2) }, LinearLayout.LayoutParams(-1, dp(3)).apply { setMargins(dp(4), 0, dp(4), dp(6)) })
+        refreshStatus()
+
+        val play = row().apply { gravity = Gravity.CENTER }
         root.addView(play, LinearLayout.LayoutParams(-1, 0, 1f))
-        val info = column().apply { setPadding(0, 0, dp(12), 0) }
-        info.addView(label(profile.name.uppercase(), 20, ink, true).apply { maxLines = 2 })
-        info.addView(label(plate.name.uppercase(), 12, accent, true))
-        if (profile.plates.size > 1) info.addView(button("Next overlay (${plateIndex + 1}/${profile.plates.size})") {
-            plateIndex = (plateIndex + 1) % profile.plates.size; synchronized(state) { state.keypad = 0 }; render()
-        })
-        info.addView(label("Keep your GameSir controls in hand.\nTap and hold keys together.", 12, muted))
-        inputText = label("Waiting for input", 12, muted).also { it.maxLines = 3; info.addView(it) }
-        info.addView(button("Release all inputs") { releaseInputs(); render() })
-        play.addView(info, LinearLayout.LayoutParams(0, -1, 0.30f))
+        if (profile.plates.size > 1) {
+            val pager = column().apply { gravity = Gravity.CENTER_HORIZONTAL }
+            pager.addView(tile("‹", "", "Previous overlay") { turnPlate(-1) }, LinearLayout.LayoutParams(dp(56), dp(56)))
+            pager.addView(label("${plateIndex + 1}/${profile.plates.size}", 16, ink, true).apply { gravity = Gravity.CENTER })
+            pager.addView(tile("›", "", "Next overlay") { turnPlate(1) }, LinearLayout.LayoutParams(dp(56), dp(56)))
+            play.addView(pager, LinearLayout.LayoutParams(dp(64), -1).apply { setMargins(0, 0, dp(6), 0) })
+        }
         val surface = OverlayKeypad(this).apply {
+            bigKeys = this@MainActivity.bigKeys; keyColor = color
             onKeysChanged = { mask -> synchronized(state) { state.keypad = mask } }
-            onKeyPressed = { key -> inputText?.text = "${plate.labels[key].ifEmpty { "Key ${keyName(key)}" }} · button ${17 + key}" }
             show(plate)
         }
         keypad = surface
-        play.addView(surface, LinearLayout.LayoutParams(0, -1, 0.70f))
+        play.addView(surface, LinearLayout.LayoutParams(0, -1, 1f))
+        val side = column().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        side.addView(tile("✋", "Release", "Release all inputs") { releaseInputs() }, LinearLayout.LayoutParams(dp(64), 0, 1f).apply { setMargins(0, 0, 0, dp(6)) })
+        side.addView(tile("🖱", "Mouse", "Mouse mode") { navigate("mouse") }, LinearLayout.LayoutParams(dp(64), 0, 1f))
+        play.addView(side, LinearLayout.LayoutParams(dp(72), -1).apply { setMargins(dp(6), 0, 0, 0) })
+    }
+
+    private fun turnPlate(step: Int) {
+        plateIndex = Math.floorMod(plateIndex + step, profile.plates.size)
+        synchronized(state) { state.keypad = 0 }
+        render()
+    }
+
+    /** "Alien vs. Predator" reads as "AVP" in the title bar; shorter names stay whole. */
+    private fun shortName(profile: Profile): String {
+        val words = profile.name.split(' ').filter { it.isNotEmpty() }
+        if (words.size >= 3 && profile.name.length > 14) return words.map { it[0].uppercaseChar() }.filter { it.isLetter() }.joinToString("")
+        return profile.name
+    }
+
+    private fun chooseProfile() {
+        val names = profiles.map { if (it.id == profileId) "●  ${it.name}" else "    ${it.name}" } + "All game profiles…"
+        AlertDialog.Builder(this).setTitle("Game").setItems(names.toTypedArray()) { _, index ->
+            if (index == profiles.size) navigate("profiles") else { selectProfile(profiles[index].id); keypad?.releaseAll(); render() }
+        }.show()
+    }
+
+    /** A square-ish side button: a glyph, an optional caption, a dark rounded panel that lights up while pressed. */
+    private fun tile(glyph: String, caption: String, description: String, action: () -> Unit): TextView = TextView(this).apply {
+        text = if (caption.isEmpty()) glyph else "$glyph\n$caption"
+        gravity = Gravity.CENTER; setTextColor(ink); textSize = if (caption.isEmpty()) 24f else 13f
+        setLineSpacing(0f, 1.1f); typeface = Typeface.DEFAULT_BOLD
+        background = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), shape(Color.rgb(60, 70, 84), 14))
+            addState(intArrayOf(), shape(panel, 14))
+        }
+        contentDescription = description; isClickable = true; isFocusable = true
+        setOnClickListener { action() }
     }
 
     private fun keyName(key: Int) = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")[key]

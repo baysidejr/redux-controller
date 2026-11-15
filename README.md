@@ -43,15 +43,14 @@ Remember the selected PC and controller mapping. Reconnect to an already paired 
 
 ### Jaguar play screen
 
-- Twelve large touchscreen keys arranged as `1 2 3 / 4 5 6 / 7 8 9 / * 0 #`.
+- Twelve big touchscreen keys arranged as `1 2 3 / 4 5 6 / 7 8 9 / * 0 #` fill the whole landscape screen, tinted in the game's colour and carrying a pictogram and a short label from the original overlay (Alien vs. Predator's three plates each have their own colour). A small numeral on each key still names the Jaguar key it sends.
+- A slim title bar names the game and plate (tap it to switch games), shows a connection dot and opens the settings pages. Release and Mouse sit at the right thumb; games with several plates get previous/next at the left thumb.
+- The original overlay artwork remains available as the "Original art" play surface in Game Profiles.
 - Touch controls remain available while a physical controller is attached.
 - G8 D-pad/left stick supplies movement; three configurable face buttons supply Jaguar A/B/C.
 - Configurable physical bindings for Pause and Option.
-- A small connection indicator and access to Connections and Game Profiles.
 - Support physical and touchscreen holds simultaneously, including multiple touch pointers.
 - Release cancelled touches; prevent stuck inputs on focus loss, disconnect, or profile changes.
-- Use a practical landscape layout for thumb reach while the phone is mounted in the G8.
-- Game-specific key labels and artwork are later additions.
 
 ## Windows input requirement
 

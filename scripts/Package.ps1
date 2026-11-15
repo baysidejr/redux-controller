@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $reduxRoot = Split-Path $PSScriptRoot -Parent
 $reduxDist = Join-Path $reduxRoot 'dist'
 New-Item -ItemType Directory -Force $reduxDist | Out-Null
-Copy-Item -LiteralPath (Join-Path $reduxRoot 'mobile\app\build\outputs\apk\debug\app-debug.apk') -Destination (Join-Path $reduxDist 'ReduxController-0.2-debug.apk')
+Copy-Item -LiteralPath (Join-Path $reduxRoot 'mobile\app\build\outputs\apk\debug\app-debug.apk') -Destination (Join-Path $reduxDist 'ReduxController-0.4-debug.apk')
 foreach ($reduxDocument in @('QUICKSTART.md', 'THIRD-PARTY-NOTICES.md', 'LICENSE', 'COPYING.GPL3')) {
     Copy-Item -LiteralPath (Join-Path $reduxRoot $reduxDocument) -Destination (Join-Path $reduxDist "windows\$reduxDocument")
 }
@@ -22,6 +22,6 @@ foreach ($reduxFile in $reduxFiles) {
     Copy-Item -LiteralPath $reduxFile.FullName -Destination $reduxTarget
 }
 Compress-Archive -Path (Join-Path $reduxSource '*') -DestinationPath (Join-Path $reduxDist 'ReduxController-0.3-source.zip') -Force
-Get-FileHash -LiteralPath (Join-Path $reduxDist 'ReduxController-0.2-debug.apk'), (Join-Path $reduxDist 'ReduxReceiver-0.3-win-x64.zip'), (Join-Path $reduxDist 'ReduxController-0.3-source.zip') |
+Get-FileHash -LiteralPath (Join-Path $reduxDist 'ReduxController-0.4-debug.apk'), (Join-Path $reduxDist 'ReduxReceiver-0.3-win-x64.zip'), (Join-Path $reduxDist 'ReduxController-0.3-source.zip') |
     ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content -LiteralPath (Join-Path $reduxDist 'SHA256SUMS.txt')
 Write-Host "Packaged APK, Windows receiver and corresponding source in $reduxDist"

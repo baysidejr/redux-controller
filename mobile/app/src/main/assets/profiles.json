@@ -4,8 +4,9 @@
       "id": "jaguar",
       "name": "Atari Jaguar",
       "subtitle": "Standard keypad · works with any game",
+      "color": "#C8102E",
       "plates": [
-        { "id": "keypad", "name": "Keypad", "template": "drawn", "labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"] }
+        {"id": "keypad", "name": "Keypad", "template": "drawn", "labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"], "icons": ["", "", "", "", "", "", "", "", "", "", "", ""]}
       ]
     },
     {
@@ -13,113 +14,126 @@
       "name": "Alien vs. Predator",
       "subtitle": "Three overlays · Marine, Predator, Alien",
       "plates": [
-        { "id": "marine", "name": "Colonial Marine", "image": "overlays/avp_marine.webp", "template": "render", "labels": ["Weapon 1", "Weapon 2", "Weapon 3", "Weapon 4", "", "", "Previous", "Map", "Next", "*", "", "#"] },
-        { "id": "predator", "name": "Predator", "image": "overlays/avp_predator.webp", "template": "render", "labels": ["Weapon 1", "Weapon 2", "Weapon 3", "Weapon 4", "Medi-kit", "Vision", "Previous", "Map", "Next", "*", "", "#"] },
-        { "id": "alien", "name": "Alien", "image": "overlays/avp_alien.webp", "template": "render", "labels": ["", "", "", "", "", "", "Previous", "Map", "Next", "*", "", "#"] }
+        {"id": "marine", "name": "Colonial Marine", "image": "overlays/avp_marine.webp", "template": "render", "labels": ["Shotgun", "Pulse rifle", "Smartgun", "Flamethrower", "", "", "Previous", "Map", "Next", "*", "", "#"], "icons": ["", "", "💥", "🔥", "", "", "◀", "", "▶", "", "", ""], "color": "#3F7A2F"},
+        {"id": "predator", "name": "Predator", "image": "overlays/avp_predator.webp", "template": "render", "labels": ["Spear", "Wristblades", "Disc", "Cannon", "Medicomp", "Vision", "Previous", "Map", "Next", "*", "", "#"], "icons": ["🔱", "🗡️", "💿", "🎯", "➕", "👁️", "◀", "", "▶", "", "", ""], "color": "#A8891F"},
+        {"id": "alien", "name": "Alien", "image": "overlays/avp_alien.webp", "template": "render", "labels": ["", "", "", "", "", "", "Previous", "Map", "Next", "*", "", "#"], "icons": ["", "", "", "", "", "", "◀", "", "▶", "", "", ""], "color": "#5B2D8E"}
       ]
     },
     {
       "id": "jaguar-baldies",
       "name": "Baldies",
       "subtitle": "Workers, builders, soldiers and scientists",
+      "color": "#A32C2C",
       "plates": [
-        { "id": "main", "name": "Baldies", "image": "overlays/baldies.webp", "template": "render", "labels": ["Worker", "Angel Wings", "Flag", "Builder", "Shovel", "Hand", "Soldier", "Zoom In/Out", "Mark / Go to location", "Scientist", "Music On/Off", "Frame"] }
+        {"id": "main", "name": "Baldies", "image": "overlays/baldies.webp", "template": "render", "labels": ["Worker", "Wings", "Flag", "Builder", "Shovel", "Hand", "Soldier", "Zoom", "Location", "Scientist", "Music", "Frame"], "icons": ["👷", "🪽", "🚩", "🔨", "⛏️", "✋", "🪖", "🔍", "📍", "🧑‍🔬", "🎵", "🎯"]}
       ]
     },
     {
       "id": "jaguar-battlemorph",
       "name": "Battlemorph",
       "subtitle": "Weapon bays and views",
+      "color": "#1E7D70",
       "plates": [
-        { "id": "main", "name": "Battlemorph", "image": "overlays/battlemorph.webp", "template": "render", "labels": ["A Weapon Bay", "Twin Shot", "B Weapon Bay", "C Weapon Bay", "Top View (Close)", "D Weapon Bay", "Cross Hair", "Top View (Far)", "Toggle Views", "Reset", "Music", "Reset"] }
+        {"id": "main", "name": "Battlemorph", "image": "overlays/battlemorph.webp", "template": "render", "labels": ["Bay A", "Twin shot", "Bay B", "Bay C", "Near view", "Bay D", "Cross hair", "Far view", "Views", "Reset", "Music", "Reset"], "icons": ["", "💥", "", "", "🔍", "", "🎯", "🔭", "👁️", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-blue-lightning",
       "name": "Blue Lightning",
       "subtitle": "Afterburner, cruise and cockpit views",
+      "color": "#5B3F9E",
       "plates": [
-        { "id": "main", "name": "Blue Lightning", "image": "overlays/blue_lightning.webp", "template": "render", "labels": ["Afterburner", "Cruise", "Air Brake", "", "", "", "Cockpit View", "Cockpit View", "Cockpit View", "Reset", "Music On/Off", "Reset"] }
+        {"id": "main", "name": "Blue Lightning", "image": "overlays/blue_lightning.webp", "template": "render", "labels": ["Afterburner", "Cruise", "Air brake", "", "", "", "Cockpit", "Cockpit", "Cockpit", "Reset", "Music", "Reset"], "icons": ["🔥", "✈️", "🛬", "", "", "", "🧭", "🧭", "🧭", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-cannon-fodder",
       "name": "Cannon Fodder",
       "subtitle": "Group selection",
+      "color": "#3E8A33",
       "plates": [
-        { "id": "main", "name": "Cannon Fodder", "image": "overlays/cannon_fodder.webp", "template": "render", "labels": ["Group 1", "Group 2", "Group 3", "", "", "", "", "", "", "*", "Music", "#"] }
+        {"id": "main", "name": "Cannon Fodder", "image": "overlays/cannon_fodder.webp", "template": "render", "labels": ["Group 1", "Group 2", "Group 3", "", "", "", "", "", "", "*", "Music", "#"], "icons": ["🪖", "🪖", "🪖", "", "", "", "", "", "", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-cybermorph",
       "name": "Cybermorph",
       "subtitle": "Super weapon and views",
+      "color": "#A82B2B",
       "plates": [
-        { "id": "main", "name": "Cybermorph", "image": "overlays/cybermorph.webp", "template": "render", "labels": ["Super Weapon", "Super Weapon", "Super Weapon", "Toggle", "Forward View", "Cockpit View", "Left View", "Rear View", "Right View", "*", "Music", "#"] }
+        {"id": "main", "name": "Cybermorph", "image": "overlays/cybermorph.webp", "template": "render", "labels": ["Super weapon", "Super weapon", "Super weapon", "Toggle", "Forward", "Cockpit", "Left", "Rear", "Right", "*", "Music", "#"], "icons": ["💥", "💥", "💥", "🔁", "▲", "👁️", "◀", "▼", "▶", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-doom",
       "name": "DOOM",
       "subtitle": "Weapons and map",
+      "color": "#8F6E1C",
       "plates": [
-        { "id": "main", "name": "DOOM", "image": "overlays/doom.webp", "template": "render", "labels": ["Fist", "Chainsaw", "Shotgun", "Chaingun", "Rocket Launcher", "Plasma Gun", "BFG 9000", "", "Map", "*", "", "#"] }
+        {"id": "main", "name": "DOOM", "image": "overlays/doom.webp", "template": "render", "labels": ["Fist", "Chainsaw", "Shotgun", "Chaingun", "Rocket", "Plasma", "BFG 9000", "", "Map", "*", "", "#"], "icons": ["✊", "🪚", "", "💥", "🚀", "⚡", "☢️", "", "", "", "", ""]}
       ]
     },
     {
       "id": "jaguar-dragon",
       "name": "Dragon: The Bruce Lee Story",
       "subtitle": "Fighting styles",
+      "color": "#9C8020",
       "plates": [
-        { "id": "main", "name": "Dragon", "image": "overlays/dragon.webp", "template": "render", "labels": ["Mantis", "Fighter", "Nunchuku", "Mantis", "Fighter", "Nunchuku", "", "", "", "*", "Music", "#"] }
+        {"id": "main", "name": "Dragon", "image": "overlays/dragon.webp", "template": "render", "labels": ["Mantis", "Fighter", "Nunchaku", "Mantis", "Fighter", "Nunchaku", "", "", "", "*", "Music", "#"], "icons": ["🦗", "👊", "🥋", "🦗", "👊", "🥋", "", "", "", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-hover-strike",
       "name": "Hover Strike",
       "subtitle": "Launch, lock-on and cameras",
+      "color": "#6B7A20",
       "plates": [
-        { "id": "main", "name": "Hover Strike", "image": "overlays/hover_strike.webp", "template": "render", "labels": ["Launch", "Lock-On", "Launch", "Radar/Compass", "Cycle Lock-On", "Radar/Compass", "External Camera", "Camera Adjust", "External Camera", "Reset", "Music", "Reset"] }
+        {"id": "main", "name": "Hover Strike", "image": "overlays/hover_strike.webp", "template": "render", "labels": ["Launch", "Lock-on", "Launch", "Radar", "Cycle target", "Radar", "Camera", "Adjust", "Camera", "Reset", "Music", "Reset"], "icons": ["🚀", "🎯", "🚀", "📡", "🔄", "📡", "📷", "🎥", "📷", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-hover-strike-unconquered",
       "name": "Hover Strike: Unconquered Lands",
       "subtitle": "Same overlay as Hover Strike",
+      "color": "#6B7A20",
       "plates": [
-        { "id": "main", "name": "Hover Strike CD", "image": "overlays/hover_strike.webp", "template": "render", "labels": ["Launch", "Lock-On", "Launch", "Radar/Compass", "Cycle Lock-On", "Radar/Compass", "External Camera", "Camera Adjust", "External Camera", "Reset", "Music", "Reset"] }
+        {"id": "main", "name": "Hover Strike CD", "image": "overlays/hover_strike.webp", "template": "render", "labels": ["Launch", "Lock-on", "Launch", "Radar", "Cycle target", "Radar", "Camera", "Adjust", "Camera", "Reset", "Music", "Reset"], "icons": ["🚀", "🎯", "🚀", "📡", "🔄", "📡", "📷", "🎥", "📷", "", "🎵", ""]}
       ]
     },
     {
       "id": "jaguar-iron-soldier",
       "name": "Iron Soldier",
       "subtitle": "Mount selection",
+      "color": "#3C5F86",
       "plates": [
-        { "id": "main", "name": "Iron Soldier", "image": "overlays/iron_soldier.webp", "template": "render", "labels": ["Right Shoulder", "", "Left Shoulder", "Right Hip", "", "Left Hip", "Right Hand", "", "Left Hand", "*", "Reset", "#"] }
+        {"id": "main", "name": "Iron Soldier", "image": "overlays/iron_soldier.webp", "template": "render", "labels": ["Right shoulder", "", "Left shoulder", "Right hip", "", "Left hip", "Right hand", "", "Left hand", "Reset", "Reset", "Reset"], "icons": ["🦾", "", "🦾", "🦿", "", "🦿", "🤖", "", "🤖", "", "", ""]}
       ]
     },
     {
       "id": "jaguar-jagmind",
       "name": "JagMIND: Bomb Squad",
       "subtitle": "Starcat Developments overlay",
+      "color": "#2B5C9E",
       "plates": [
-        { "id": "main", "name": "JagMIND", "image": "overlays/jagmind.webp", "template": "scan", "labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"] }
+        {"id": "main", "name": "JagMIND", "image": "overlays/jagmind.webp", "template": "scan", "labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "Delete", "0", "Enter"], "icons": ["", "", "", "", "", "", "", "", "", "", "", ""]}
       ]
     },
     {
       "id": "jaguar-trevor-mcfur",
       "name": "Trevor McFur in the Crescent Galaxy",
       "subtitle": "Weapons",
+      "color": "#A6382E",
       "plates": [
-        { "id": "main", "name": "Trevor McFur", "image": "overlays/trevor_mcfur.webp", "template": "scan", "labels": ["Magnet", "Tracer", "Beam", "Flash", "Missile", "Ring", "Bolt", "Shield", "Cutter", "*", "", "#"] }
+        {"id": "main", "name": "Trevor McFur", "image": "overlays/trevor_mcfur.webp", "template": "scan", "labels": ["Magnet", "Tracer", "Beam", "Flash", "Missile", "Ring", "Bolt", "Shield", "Cutter", "*", "", "#"], "icons": ["🧲", "🔵", "🔆", "💥", "🚀", "⭕", "⚡", "🛡️", "✂️", "", "", ""]}
       ]
     },
     {
       "id": "jaguar-wolfenstein",
       "name": "Wolfenstein 3D",
       "subtitle": "Game slots, save and map",
+      "color": "#9E2727",
       "plates": [
-        { "id": "main", "name": "Wolfenstein 3D", "image": "overlays/wolfenstein.webp", "template": "scan", "labels": ["Game 1", "Game 2", "Game 3", "Save Game", "Save Game", "Map", "", "", "", "*", "Music", "#"] }
+        {"id": "main", "name": "Wolfenstein 3D", "image": "overlays/wolfenstein.webp", "template": "scan", "labels": ["Game 1", "Game 2", "Game 3", "", "Map", "", "", "", "", "*", "Music", "#"], "icons": ["💾", "💾", "💾", "", "", "", "", "", "", "", "🎵", ""]}
       ]
     }
   ]

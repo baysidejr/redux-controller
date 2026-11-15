@@ -20,6 +20,19 @@ class ProfilesTest {
         assertEquals(profiles.map { it.id }.toSet().size, profiles.size)
     }
 
+    @Test fun platesCarryTwelveIconsAndAColourForTheBigKeys() {
+        val profiles = Profiles.parse(json)
+        for (profile in profiles) for (plate in profile.plates) {
+            assertEquals(12, plate.icons.size)
+            assertTrue("${profile.id}/${plate.id} has no colour", profile.colorOf(plate) != 0)
+        }
+        val avp = profiles.first { it.id == "jaguar-avp" }
+        assertEquals(3, avp.plates.map { avp.colorOf(it) }.toSet().size)
+        assertEquals(0xFF3F7A2F.toInt(), avp.colorOf(avp.plates.first { it.id == "marine" }))
+        assertEquals(Profile.DEFAULT_COLOR, Profiles.parse("""{"profiles":[{"id":"jaguar","name":"J","plates":[{"id":"k","name":"K","labels":["1","2","3","4","5","6","7","8","9","*","0","#"]}]}]}""").first().let { it.colorOf(it.plates[0]) })
+        assertNull(Profiles.colorOf("red")); assertEquals(0xFF102030.toInt(), Profiles.colorOf("#102030"))
+    }
+
     @Test fun keyIndexFollowsRowsOfThreeOnBothTemplates() {
         for (template in listOf(KeypadGeometry.RENDER, KeypadGeometry.SCAN)) {
             for (key in 0 until 12) {

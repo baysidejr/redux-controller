@@ -10,3 +10,6 @@ dist/
 **/*.jks
 /android/
 /receiver/
+
+# Kotlin compiler session data
+mobile/.kotlin/

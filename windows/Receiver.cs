@@ -27,13 +27,15 @@ public readonly record struct ReceiverSnapshot(bool OutputReady, string? OutputE
 /// </summary>
 public sealed class Receiver
 {
-    public const string Version = "0.4.0";
+    public const string Version = "0.5.0";
     public const int HttpsPort = 19443, ControlPort = 19444, InputPort = 19876, DiscoveryPort = 19879;
     public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReduxController");
 
     public string Pin { get; } = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
     public bool TestMode { get; }
     public string CertificateFingerprint { get; }
+    /// <summary>Self-update from GitHub releases; set by the program so the control port can report and drive it.</summary>
+    public Updater? Updater { get; set; }
 
     private readonly object gate = new();
     private readonly X509Certificate2 cert;
@@ -121,6 +123,7 @@ public sealed class Receiver
         app.MapGet("/control/state", ControlState);
         app.MapPost("/control/profile", ControlProfile);
         app.MapPost("/control/disconnect", (HttpRequest _) => { DisconnectPhone(); return Results.Ok(new { ok = true }); });
+        app.MapPost("/control/update", ControlUpdate);
         // Local-only inspection for automated emulator tests, never present in normal operation.
         if (TestMode) app.MapGet("/control/test-capture", (HttpRequest request) =>
         {
@@ -285,7 +288,40 @@ public sealed class Receiver
             phonePaired = now.PhonePaired, phoneName = now.PhoneName, packets = now.Packets, inputAgeMs = now.InputAgeMs, released = now.Released,
             profile = now.Profile, pairedPhones = now.PairedPhones,
             addresses = LocalAddresses().Select(a => a.Address).ToArray(), httpsPort = HttpsPort,
+            update = UpdateState(),
         });
+    }
+
+    private object? UpdateState()
+    {
+        if (Updater?.Snapshot() is not { } update) return null;
+        return new { stage = update.Stage.ToString().ToLowerInvariant(), latest = update.Latest, error = update.Error, checkedAt = update.Checked?.ToString("O"), automatic = update.Automatic };
+    }
+
+    // {"action":"check"} looks for a newer release and downloads it; {"action":"install"} applies a downloaded one
+    // (the receiver exits and restarts); {"action":"automatic","enabled":bool} sets the background policy.
+    private async Task<IResult> ControlUpdate(HttpRequest request)
+    {
+        if (Updater == null) return Results.Json(new { error = "Updates are not available in this receiver." }, statusCode: 404);
+        JsonDocument body;
+        try { body = await JsonDocument.ParseAsync(request.Body); }
+        catch (JsonException) { return Results.Json(new { error = "Invalid request" }, statusCode: 400); }
+        using (body)
+        {
+            var action = body.RootElement.TryGetProperty("action", out var entry) && entry.ValueKind == JsonValueKind.String ? entry.GetString() : null;
+            switch (action)
+            {
+                case "check": Updater.Check(); break;
+                case "install":
+                    if (Updater.Snapshot().Stage != UpdateStage.Ready) return Results.Json(new { error = "No update is ready to install.", update = UpdateState() }, statusCode: 409);
+                    Updater.Install(); break;
+                case "automatic":
+                    if (!body.RootElement.TryGetProperty("enabled", out var enabled) || enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return Results.Json(new { error = "enabled must be true or false" }, statusCode: 400);
+                    Updater.Automatic = enabled.GetBoolean(); break;
+                default: return Results.Json(new { error = "action must be check, install or automatic" }, statusCode: 400);
+            }
+            return Results.Ok(new { ok = true, update = UpdateState() });
+        }
     }
 
     private async Task<IResult> ControlProfile(HttpRequest request)

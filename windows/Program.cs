@@ -10,6 +10,8 @@ static class Program
         if (args.Contains("--self-test")) { SelfTest.Run(); return 0; }
         ReceiverLog.DisableQuickEdit();
         bool testMode = args.Contains("--test-mode");
+        // Hidden flags for exercising the self-updater: a different release feed and a pretended current version.
+        string? updateSource = ValueOf(args, "--update-source"), pretendVersion = ValueOf(args, "--pretend-version");
         using var instance = new Mutex(true, "Local\\ReduxControllerReceiver", out bool firstInstance);
         if (!firstInstance)
         {
@@ -18,6 +20,8 @@ static class Program
         }
         ApplicationConfiguration.Initialize();
         var receiver = new Receiver(testMode);
+        var updater = new Updater(pretendVersion ?? Receiver.Version, updateSource ?? Updater.DefaultSource, Receiver.DataDirectory) { Background = !testMode || updateSource != null };
+        receiver.Updater = updater;
         try { receiver.StartAsync().GetAwaiter().GetResult(); }
         catch (Exception e)
         {
@@ -31,7 +35,13 @@ static class Program
             try { StartupTask.Register(); ReceiverLog.WriteLine("Start with Windows registered during setup."); }
             catch (Exception e) { ReceiverLog.WriteLine("Start with Windows could not be registered: " + e.Message); }
         }
-        Application.Run(new TrayApp(receiver));
+        Application.Run(new TrayApp(receiver, updater));
         return 0;
+    }
+
+    static string? ValueOf(string[] args, string flag)
+    {
+        int index = Array.IndexOf(args, flag);
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 }

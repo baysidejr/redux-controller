@@ -10,12 +10,14 @@ namespace Redux;
 /// <summary>
 /// The receiver's only window: a task-tray icon. Its menu shows the controller state, the
 /// phone connection, the PC address and the PIN, and offers disconnect, forget phones,
-/// joy.cpl, the log folder, Start with Windows and Exit. A timer polls the receiver so no
-/// receiver thread ever touches the UI; transitions show as balloon notifications.
+/// joy.cpl, the log folder, Start with Windows, updates and Exit. A timer polls the receiver and
+/// the updater so no background thread ever touches the UI; transitions show as balloon notifications.
+/// Updates install on their own while no phone is connected (unless turned off), or from the menu.
 /// </summary>
 public sealed partial class TrayApp : ApplicationContext
 {
     private readonly Receiver receiver;
+    private readonly Updater updater;
     private readonly NotifyIcon icon;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 500 };
     private readonly ToolStripMenuItem controllerItem = new() { Enabled = false };
@@ -26,15 +28,21 @@ public sealed partial class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem disconnectItem = new("Disconnect phone");
     private readonly ToolStripMenuItem forgetItem = new("Forget paired phones…");
     private readonly ToolStripMenuItem startupItem = new("Start with Windows");
+    private readonly ToolStripMenuItem installItem = new() { Visible = false };
+    private readonly ToolStripMenuItem checkItem = new("Check for updates now");
+    private readonly ToolStripMenuItem automaticItem = new("Update automatically") { CheckOnClick = true };
     private readonly Icon readyIcon = MakeIcon(Color.FromArgb(46, 160, 67));
     private readonly Icon waitingIcon = MakeIcon(Color.FromArgb(255, 106, 80));
     private readonly Icon errorIcon = MakeIcon(Color.FromArgb(120, 120, 120));
     private ReceiverSnapshot last;
-    private bool first = true;
+    private UpdateSnapshot lastUpdate;
+    private bool first = true, manualCheck, exiting;
+    private DateTime nextCheck = DateTime.Now.AddSeconds(20);
 
-    public TrayApp(Receiver receiver)
+    public TrayApp(Receiver receiver, Updater updater)
     {
         this.receiver = receiver;
+        this.updater = updater;
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem($"Redux Controller receiver {Receiver.Version}") { Enabled = false });
         menu.Items.Add(new ToolStripSeparator());
@@ -50,12 +58,20 @@ public sealed partial class TrayApp : ApplicationContext
         menu.Items.Add(new ToolStripMenuItem("Open log folder", null, (_, _) => Open("explorer.exe", Receiver.DataDirectory)));
         menu.Items.Add(startupItem);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(installItem);
+        menu.Items.Add(checkItem);
+        menu.Items.Add(automaticItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Exit and remove the controller", null, (_, _) => Exit()));
         menu.Opening += (_, _) => { Refresh(); RefreshAddress(); RefreshStartup(); };
         pinItem.Click += (_, _) => CopyPin();
         disconnectItem.Click += (_, _) => receiver.DisconnectPhone();
         forgetItem.Click += (_, _) => ForgetPhones();
         startupItem.Click += (_, _) => ToggleStartup();
+        installItem.Click += (_, _) => InstallUpdate();
+        checkItem.Click += (_, _) => { manualCheck = true; updater.Check(); };
+        automaticItem.Checked = updater.Automatic;
+        automaticItem.CheckedChanged += (_, _) => updater.Automatic = automaticItem.Checked;
 
         icon = new NotifyIcon { ContextMenuStrip = menu, Visible = true, Icon = waitingIcon, Text = "Redux Controller" };
         icon.DoubleClick += (_, _) => ShowPin();
@@ -88,6 +104,56 @@ public sealed partial class TrayApp : ApplicationContext
             if (now.OutputError != last.OutputError && now.OutputError != null && !receiver.TestMode) Balloon("Windows controller unavailable", now.OutputError, ToolTipIcon.Warning);
         }
         last = now; first = false;
+        RefreshUpdate(now);
+    }
+
+    private void RefreshUpdate(ReceiverSnapshot now)
+    {
+        if (exiting) return;
+        var update = updater.Snapshot();
+        bool busy = update.Stage is UpdateStage.Checking or UpdateStage.Downloading or UpdateStage.Installing;
+        checkItem.Enabled = !busy;
+        checkItem.Text = update.Stage switch
+        {
+            UpdateStage.Checking => "Checking for updates…",
+            UpdateStage.Downloading => $"Downloading receiver {update.Latest}…",
+            UpdateStage.UpToDate => "Check for updates now (up to date)",
+            UpdateStage.Failed => "Check for updates now (last check failed)",
+            _ => "Check for updates now",
+        };
+        installItem.Visible = update.Stage == UpdateStage.Ready;
+        installItem.Text = $"Install receiver {update.Latest} now (restarts the receiver)";
+        if (update.Stage != lastUpdate.Stage)
+        {
+            switch (update.Stage)
+            {
+                case UpdateStage.Ready:
+                    if (!(updater.Automatic && !now.PhonePaired)) Balloon($"Receiver {update.Latest} is ready", updater.Automatic ? "It installs on its own once the phone disconnects, or install it now from the tray menu." : "Install it from the tray menu; the receiver restarts and the phone reconnects.", ToolTipIcon.Info);
+                    break;
+                case UpdateStage.UpToDate:
+                    if (manualCheck) Balloon("Up to date", $"Receiver {Receiver.Version} is the latest release.", ToolTipIcon.Info);
+                    break;
+                case UpdateStage.Failed:
+                    if (manualCheck) Balloon("Update check failed", update.Error ?? "unknown error", ToolTipIcon.Warning);
+                    break;
+                case UpdateStage.Installing:
+                    // Started from the control port: the helper is waiting for this process to exit.
+                    Exit();
+                    return;
+            }
+            if (update.Stage is not (UpdateStage.Checking or UpdateStage.Downloading)) manualCheck = false;
+        }
+        lastUpdate = update;
+        // Automatic policy: check every few hours and install a verified build while no phone is connected.
+        if (updater.Background && updater.Automatic && !busy && DateTime.Now >= nextCheck && update.Stage != UpdateStage.Ready) { nextCheck = DateTime.Now.Add(Updater.Interval); updater.Check(); }
+        else if (updater.Background && updater.Automatic && update.Stage == UpdateStage.Ready && !now.PhonePaired) InstallUpdate();
+    }
+
+    private void InstallUpdate()
+    {
+        try { updater.Install(); }
+        catch (Exception e) { Balloon("Update not installed", e.Message, ToolTipIcon.Warning); return; }
+        Exit();
     }
 
     private string Tooltip(ReceiverSnapshot now)
@@ -146,9 +212,13 @@ public sealed partial class TrayApp : ApplicationContext
 
     private void Exit()
     {
+        if (exiting) return;
+        exiting = true;
         timer.Stop();
         icon.Visible = false;
-        try { receiver.StopAsync().GetAwaiter().GetResult(); } catch (Exception e) { ReceiverLog.WriteLine("Stop failed: " + e.Message); }
+        // Stop on a pool thread: awaiting on the UI thread would park the continuations behind this blocked message loop.
+        try { if (!Task.Run(receiver.StopAsync).Wait(TimeSpan.FromSeconds(15))) ReceiverLog.WriteLine("Stop timed out after 15 s; exiting anyway."); }
+        catch (Exception e) { ReceiverLog.WriteLine("Stop failed: " + e.Message); }
         icon.Dispose();
         ExitThread();
     }

@@ -80,6 +80,18 @@ static class SelfTest
             Check(new PairedPhones(store).Count == 0, "forgetting phones empties the store");
         }
         finally { File.Delete(store); }
+        // Self-update (receiver 0.5): the release feed names the package, versions compare numerically and a download is only trusted with its published checksum.
+        var release = Updater.ParseRelease("""{"tag_name":"v0.6.0","html_url":"https://example.invalid/release","assets":[{"name":"ReduxController-0.4-debug.apk","browser_download_url":"https://example.invalid/apk"},{"name":"ReduxReceiver-0.5-win-x64.zip","browser_download_url":"https://example.invalid/zip"},{"name":"SHA256SUMS-0.6.txt","browser_download_url":"https://example.invalid/sums"}]}""");
+        Check(release != null && release.Version == new Version(0, 5, 0) && release.ZipName == "ReduxReceiver-0.5-win-x64.zip" && release.ZipUrl == "https://example.invalid/zip" && release.SumsUrl == "https://example.invalid/sums" && release.Tag == "v0.6.0", "the latest release yields the receiver package, its version and the checksum file");
+        Check(Updater.ParseRelease("""{"tag_name":"database","assets":[{"name":"gamedb-psx-art.zip","browser_download_url":"https://example.invalid/x"}]}""") == null, "a release without a receiver package offers no update");
+        Check(Updater.ParseVersion("0.4") == new Version(0, 4, 0) && Updater.ParseVersion("0.4.1") > Updater.ParseVersion("0.4") && Updater.ParseVersion("0.10") > Updater.ParseVersion("0.9.9") && Updater.ParseVersion("v1.2.3") == new Version(1, 2, 3), "two- and three-part versions compare numerically");
+        var hash = new string('a', 60) + "0f1e";
+        Check(Updater.ChecksumFor(hash + " *ReduxReceiver-0.5-win-x64.zip\n" + new string('b', 64) + "  SHA256SUMS-0.6.txt\n", "ReduxReceiver-0.5-win-x64.zip") == hash, "a sha256sum line with the binary marker is matched by file name");
+        Check(Updater.ChecksumFor(hash.ToUpperInvariant() + "  reduxreceiver-0.5-win-x64.zip", "ReduxReceiver-0.5-win-x64.zip") == hash, "a two-space line matches regardless of case and is returned lower-case");
+        Check(Updater.ChecksumFor(hash + " *ReduxReceiver-0.4-win-x64.zip", "ReduxReceiver-0.5-win-x64.zip") == null && Updater.ChecksumFor("not a checksum file", "x.zip") == null, "a package missing from the checksum file is not trusted");
+        var relaunch = Updater.RelaunchArguments(new[] { @"C:\Program Files\Redux\ReduxReceiver.exe", "--test-mode", "--pretend-version", "0.4.9", "--start-with-windows", "--update-source", "http://127.0.0.1:1/x" }, @"C:\Program Files\Redux\ReduxReceiver.exe");
+        Check(relaunch.SequenceEqual(new[] { "--test-mode" }), "the restarted receiver keeps runtime flags and drops set-up and test-only ones");
+        Check(Updater.RelaunchArguments(new[] { @"C:\x\ReduxReceiver.dll", "--test-mode" }, @"C:\dotnet\dotnet.exe").SequenceEqual(new[] { @"C:\x\ReduxReceiver.dll", "--test-mode" }), "under the dotnet host the assembly stays the first argument");
         Console.WriteLine("All receiver self-tests passed. No driver or virtual controller was installed by these tests.");
     }
     sealed class PausedConsole(ManualResetEventSlim resume) : TextWriter

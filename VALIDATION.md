@@ -1,5 +1,11 @@
 # Prototype validation
 
+## App 0.5.0: reconnect at a new address (2026-11-16)
+
+- `PcLocator` unit tests (3): saved address first and each address once; the move goes to the address where the paired PC answers and skips another Redux PC; nothing found keeps the saved address.
+- Emulator (app 0.5.0) against receiver 0.5.0 from source in `--test-mode` on the development PC: pairing with the PIN at 10.0.2.2; reopening the app reconnected without the PIN; with the saved address changed to the PC's LAN address (no certificate stored for it) the phone reconnected, the certificate identifying the PC; a wrong pinned certificate was refused, and the receiver log shows no reconnect request for it (the token is sent only after the TLS check); a phone set up like app 0.4 (certificate only under the address) reconnected and kept the certificate under `paired_cert`; a dead saved address starts the network search. Receiver discovery was answered on the LAN (`DEVASTATOR`, 192.168.4.35) from a broadcast sent on the PC.
+- Not covered: the network search finding the PC at a new address from a real phone (the emulator's NAT carries no broadcasts).
+
 Validated on November 11, 2026 (America/New_York).
 
 ## Passed

@@ -39,6 +39,10 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
     private var sequence = 0L
     private var host = prefs.getString("host", "").orEmpty()
     private var token: ByteArray? = prefs.getString("token", null)?.let { runCatching { unhex(it) }.getOrNull() }?.takeIf { it.size == 32 }
+    /** SHA-256 of the paired PC's certificate: it identifies that PC at any address. Phones
+     *  paired before 0.5 have it only under the paired address. */
+    private var pairedCert: String? = prefs.getString("paired_cert", null) ?: prefs.getString("cert:$host", null)
+    @Volatile private var lastFingerprint: String? = null
     private var lastAttempt = 0L
     private var failures = 0
     @Volatile var connected = false; private set
@@ -59,6 +63,9 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
     val pairedHost: String get() = host
 
     init {
+        // Keep the upgraded phone's certificate under its own key, so a later move to a new
+        // address (which has no cert:<address> entry) still knows which PC it paired with.
+        if (prefs.getString("paired_cert", null) == null && pairedCert != null) prefs.edit().putString("paired_cert", pairedCert).apply()
         worker.scheduleWithFixedDelay({ runCatching { send() }.onFailure { fail(it) } }, 0, 8, TimeUnit.MILLISECONDS)
         control.scheduleWithFixedDelay({
             if (connected) {
@@ -74,7 +81,10 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
 
     private fun retryDelay() = if (failures < 3) 3000L else 10000L
 
-    fun discover(found: (List<Pair<String, String>>) -> Unit) = control.execute {
+    fun discover(found: (List<Pair<String, String>>) -> Unit) = control.execute { found(discoverNow()) }
+
+    /** (PC name, address) for every Redux receiver that answers a broadcast on this network. */
+    private fun discoverNow(): List<Pair<String, String>> {
         val hosts = linkedMapOf<String, String>()
         runCatching {
             DatagramSocket().use { s ->
@@ -92,7 +102,7 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
                 }
             }
         }
-        found(hosts.map { it.value to it.key })
+        return hosts.map { it.value to it.key }
     }
 
     /** Pair with the PC's current PIN; the reply's token makes later reconnects silent. */
@@ -104,11 +114,14 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
             host = address
             lastAttempt = System.currentTimeMillis()
             changed("Pairing with $host…")
-            val reply = request("/pair", JSONObject().put("pin", pin).put("name", android.os.Build.MODEL).toString(), false)
+            // Pairing trusts this address's certificate on first use (the PIN proves the PC);
+            // from then on that certificate, not the address, identifies the PC.
+            val reply = request("/pair", JSONObject().put("pin", pin).put("name", android.os.Build.MODEL).toString(), false, address, expect = null)
             val minted = unhex(reply.optString("token"))
             require(minted.size == 32) { "Receiver returned no reconnect token; update Redux Receiver." }
             token = minted
-            prefs.edit().putString("host", address).putString("token", hex(minted)).apply()
+            pairedCert = lastFingerprint
+            prefs.edit().putString("host", address).putString("token", hex(minted)).putString("paired_cert", pairedCert).apply()
             open(reply)
             wantConnected = true
         }.onFailure { fail(it) }
@@ -123,7 +136,14 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
         lastAttempt = System.currentTimeMillis()
         runCatching {
             changed(if (failures == 0) "Connecting to ${pcName.ifEmpty { host }}…" else "Waiting for ${pcName.ifEmpty { host }}… retrying")
-            val reply = request("/reconnect", JSONObject().put("token", hex(saved)).put("name", android.os.Build.MODEL).toString(), false)
+            val body = JSONObject().put("token", hex(saved)).put("name", android.os.Build.MODEL).toString()
+            val reply = try {
+                request("/reconnect", body, false)
+            } catch (error: Exception) {
+                // The saved address did not answer twice running: the PC may have a new address.
+                if (error is PairingRevoked || pairedCert == null || failures < 1) throw error
+                relocate(body) ?: throw error
+            }
             open(reply)
             failures = 0
         }.onFailure { error ->
@@ -133,6 +153,20 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
                 changed("The PC no longer knows this phone. Pair again with its PIN.")
             } else changed("Waiting for ${pcName.ifEmpty { host }} · ${error.message ?: "not reachable"}")
         }
+    }
+
+    /** Search the network for the paired PC and reconnect to it at its new address, without a PIN. */
+    private fun relocate(body: String): JSONObject? {
+        changed("Looking for ${pcName.ifEmpty { "the PC" }} on this network…")
+        val found = PcLocator.relocate(host, discoverNow().map { it.second }) { address ->
+            // A PC whose certificate is not the paired one fails the TLS check before the token is sent.
+            try { request("/reconnect", body, false, address) }
+            catch (revoked: PairingRevoked) { throw revoked }  // the paired PC answered: it forgot this phone
+            catch (_: Exception) { null }
+        } ?: return null
+        host = found.first
+        prefs.edit().putString("host", host).apply()
+        return found.second
     }
 
     private fun open(reply: JSONObject) {
@@ -181,7 +215,9 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
 
     // Adapted from Dish's TofuTrustManager: pin the first LAN certificate and reject changes.
     @Suppress("CustomX509TrustManager")
-    private fun request(path: String, body: String?, authenticated: Boolean): JSONObject {
+    // With [expect] (the paired PC's fingerprint) only that certificate is accepted, at any address;
+    // without it the address's first certificate is pinned, as for a new pairing.
+    private fun request(path: String, body: String?, authenticated: Boolean, address: String = host, expect: String? = pairedCert): JSONObject {
         var accepted: ByteArray? = null
         val trust = object : X509TrustManager {
             override fun checkClientTrusted(c: Array<out X509Certificate>?, a: String?) { throw CertificateException("Client certificate refused") }
@@ -190,15 +226,20 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
                 val cert = chain?.firstOrNull() ?: throw CertificateException("Missing receiver certificate")
                 cert.checkValidity()
                 val fingerprint = hex(MessageDigest.getInstance("SHA-256").digest(cert.encoded))
-                val key = "cert:$host"
-                val previous = prefs.getString(key, null)
-                if (previous != null && previous != fingerprint) throw CertificateException("PC certificate changed. Verify the PC before resetting trust.")
-                if (previous == null) prefs.edit().putString(key, fingerprint).commit()
+                if (expect != null) {
+                    if (fingerprint != expect) throw CertificateException(if (address == host) "PC certificate changed. Verify the PC before resetting trust." else "Not the paired PC")
+                } else {
+                    val key = "cert:$address"
+                    val previous = prefs.getString(key, null)
+                    if (previous != null && previous != fingerprint) throw CertificateException("PC certificate changed. Verify the PC before resetting trust.")
+                    if (previous == null) prefs.edit().putString(key, fingerprint).commit()
+                }
+                lastFingerprint = fingerprint
                 accepted = cert.encoded
             }
         }
         val tls = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), SecureRandom()) }
-        val c = URL("https://$host:19443$path").openConnection() as HttpsURLConnection
+        val c = URL("https://$address:19443$path").openConnection() as HttpsURLConnection
         c.sslSocketFactory = tls.socketFactory
         c.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, ssl ->
             val actual = ssl.peerCertificates.firstOrNull()?.encoded
@@ -229,8 +270,8 @@ class ReduxLink(context: Context, private val state: ControllerState, private va
     }
     /** Forget the PC's certificate and the reconnect token; the next connection needs a PIN. */
     fun forgetTrust(address: String) {
-        prefs.edit().remove("cert:$address").remove("token").remove("pc").apply()
-        token = null; wantConnected = false; pcName = ""
+        prefs.edit().remove("cert:$address").remove("token").remove("pc").remove("paired_cert").apply()
+        token = null; wantConnected = false; pcName = ""; pairedCert = null
     }
     fun close() { control.shutdownNow(); worker.execute { closeSession() }; worker.shutdown() }
     companion object {
